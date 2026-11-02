@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "progress.schema.json",
+  "title": "Stage progress",
+  "description": "Status of every stage of the active plan. Updated only in the commit that closes a stage, after its verification has run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["plan", "updated", "stages"],
+  "properties": {
+    "plan": {
+      "type": "string",
+      "description": "Path to the plan file these stages come from."
+    },
+    "updated": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of the last change, YYYY-MM-DD."
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "status"],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "next", "in_progress", "done", "skipped"],
+            "description": "Exactly one stage is 'next' or 'in_progress' at a time."
+          },
+          "verified": {
+            "type": "string",
+            "description": "The command or drill that was run to close the stage, as it appears in the plan."
+          },
+          "commit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$",
+            "description": "Commit that closed the stage."
+          },
+          "closed": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free text: what was cut, what is left, what surprised us."
+          }
+        }
+      }
+    }
+  }
+}

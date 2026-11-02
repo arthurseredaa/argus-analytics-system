@@ -1,0 +1,52 @@
+# Open questions and assumptions
+
+Questions go to the company together with the design. Each has a default we design for, so an unanswered question does not block anything. When an answer arrives, record it here and update the affected ADR.
+
+Status: `open` until answered, then `answered: <summary>`.
+
+## Questions that change the architecture
+
+| ID | Question | Default we design for | Why it matters | Status |
+|---|---|---|---|---|
+| Q-2 | Where are users and partners located? Any data residency requirements (GDPR)? | Mostly EU and US traffic. Operational data stored in the EU. | Region of the database, latency target, legal basis for storing email. | open |
+| Q-3 | How many prelanders are there, and on which domains? Are they all served through Cloudflare? | Several prelanders under one registrable domain, identified by a prelander ID in the path. | First-party cookies are per domain. Different domains mean one person becomes several users. | open |
+| Q-6 | What can partners send in a postback: GET or POST, HMAC signature or only a shared token, a unique transaction ID, payout amount and currency, retry policy, the name of the parameter that carries our click ID? | Our contract: signed POST with JSON, a transaction ID and an optional payout. A fallback GET with a per-partner token for partners that only support URL macros. | Authentication strength, deduplication key, whether EPU can later be computed from real revenue. | open |
+| Q-16 | How long should email and raw events be kept? Does anything downstream need the email in plain text (CRM, mailing)? | Email encrypted at rest, never sent to BigQuery in plain text. Retention period to agree. | Storage design for personal data and deletion requests. | open |
+| Q-17 | Whose Cloudflare account hosts the MVP, and what monthly spend is acceptable? Is the Workers Paid plan ($5/month) fine? | My own account, minimal paid plan if a needed service requires it, costs reported. | Some Cloudflare services are paid-only (to confirm during research). | open |
+| Q-18 | Is there an existing BigQuery project and dataset with conventions (region, naming, partitioning)? | New dataset, partitioned by event date, region matching Q-2. | Delivery design and cost. | open |
+
+## Questions about behaviour
+
+| ID | Question | Default we design for | Status |
+|---|---|---|---|
+| Q-1 | A returning user has no Lead but has already answered steps 1 and 2. Show the quiz again or redirect straight away? Ask this one explicitly: rule 3 ("apply normal selection; if answers are not sufficient, show the quiz") can also be read as "sufficient answers always skip the quiz", for every user. | Show the quiz again, prefilled. Skipping the prelander is reserved for users registered with a partner, which is how the spec frames it. A user whose Leads are all for disabled offers skips the quiz if answers are sufficient (rule 3). | open |
+| Q-4 | A user changes an answer (back button, second tab). Which answer counts? | The latest answer accepted by the server. All answer events are kept for analytics: every change is a new answer event with a new EventID, and a resend of the same answer keeps its EventID and is dropped as a duplicate. The `step_viewed` events (A-1) show the user going back. | open |
+| Q-5 | Is the email step mandatory before the redirect? What validation? | Mandatory, format check only, no confirmation email. | open |
+| Q-7 | Is there exactly one universal offer, or could there be several? | Exactly one, marked in the catalog. | open |
+| Q-8 | A Purchase arrives without an earlier Lead. Count it? Does it give a redirect right? | Count it as a Purchase and flag it. No redirect right, since rule 1 names Lead only. | open |
+| Q-9 | Who enables and disables offers, and how fast must a change take effect? | A config record changed by a script. Takes effect within 60 seconds. | open |
+| Q-10 | Several Leads for active offers: which one wins? | The most recent Lead. | open |
+| Q-11 | A postback references an unknown click or user. Reject or keep? | Keep it in a quarantine table, do not count it, alert. Reply 202 so the partner does not retry forever. | open |
+| Q-12 | Late postbacks: report them by click date or by postback date? Is there an attribution window? | Both views. Funnel reports by click date (cohort), finance view by postback date. No window cut-off in the MVP. | open |
+| Q-13 | What counts as "started the quiz": the page view or the first answer? | Quiz step 1 shown, recorded as the `step_viewed` event for step 1 (A-1). Otherwise "started" and "passed step 1" are the same number. | open |
+| Q-14 | Which time zone defines a reporting day? | UTC. | open |
+| Q-15 | Should bot traffic be filtered out of funnel metrics? | Out of scope for the MVP. Basic rate limiting only. | open |
+| Q-19 | Is cross-device identity needed (by email, or by an ID returned from the partner)? | No. Identity is a first-party cookie; email is not used to merge users. | open |
+| Q-20 | "Offer exclusion after Purchase": should the purchased offer stop being shown to that user, and does that override the Lead return rule? | After a Purchase on offer X, X is removed from the user's candidates and the Lead rule no longer applies to X. Design-only. | open |
+| Q-21 | A user with a Lead returns. Is the skip a server redirect before the prelander renders? Is the visit recorded as a funnel start? Does the return redirect count as a new offer transition with a new click ID, and does a later Purchase belong to the original click or the return click? | Server-side 302 at entry, before rendering. The visit is recorded (prelander view with reason `lead_return`) but excluded from "started the quiz". The return redirect gets a new click ID and counts as a repeat transition, not a new unique user on the offer. A Purchase is attributed to whatever click ID the partner sends back. | open |
+| Q-22 | A user returns through a different prelander. Which prelander gets the Lead and the Purchase? | Funnel steps belong to the prelander of the visit. Lead and Purchase belong to the prelander of the click they reference (last touch at click level). | open |
+| Q-23 | A second Lead arrives for the same user and offer with a new transaction ID. Duplicate or a real second registration? | Duplicate for counting: one Lead per user per offer. The postback is still stored. | open |
+| Q-24 | A postback names an offer that does not match its click, or an offer that is disabled. Reject, quarantine or accept? | Offer mismatch: rejected as malformed, data unchanged. Disabled offer: accepted and counted (the registration happened), but it gives no redirect right. | open |
+| Q-25 | Step 1 changes after step 2 was answered. Is the step 2 answer still valid, given its wording depended on step 1? Do answers expire? | Still valid: the answer options are the same, only the wording differs. Answers do not expire in the MVP. | open |
+| Q-26 | What is a visit, and when does an unfinished user count as dropped off? | A visit is one load of the prelander page (new visit ID per load). Drop-off at step N is users who reached step N minus users who reached step N+1 in the same cohort, so no timeout is needed. | open |
+
+## Assumptions (no question needed)
+
+| ID | Assumption | Based on |
+|---|---|---|
+| A-1 | A visit produces 9 events: prelander view, a `step_viewed` for each of the 3 quiz steps, 3 step answers, offer selected, offer click. Lead and Purchase are counted separately. Going back and changing an answer adds one more `step_viewed` and one more answer event, each with its own EventID; these are not in the 9. The design is sized for 9 events per visit, above the spec's 6; the monthly load and cost are in `nfr.md`. | The spec's load figure assumed 6 events. `step_viewed` was added on 2026-11-02, Arthur's decision. Answer events alone cannot show a user who went back to a step and left the answer as it was, or the time spent on a step before answering. A changed answer is a product signal (something made the user reconsider), and the view events show the path that led to it. Q-13 defines "started the quiz" as step 1 shown, which needs a view event that the 6-event list did not have. Cost: 50% more events; the effect on the monthly bill is in the `nfr.md` cost table. |
+| A-2 | "Specialised offer" means every offer except the universal one. | Spec catalog, offer 007 is the only one with "any" ethnicity. |
+| A-3 | Average load is about 6.9 events/s (18M / 30 days / 86,400 s) with the 9 events per visit from A-1; the spec's 12M would give 4.6. The peak of 200 events/s for 5 minutes is about 60,000 events; the spec gives the peak separately, so it does not change with A-1. | Spec numbers, A-1. |
+| A-4 | The 15-minute freshness target applies to analytics. Rule-relevant facts (Leads, offer status) must be visible to offer selection within seconds. | Spec: freshness is stated for analytics; Lead return is part of the live path. |
+| A-5 | In the MVP, "transition to the partner" is reproduced by our redirect endpoint returning a 302 to the `.example` URL. Tests check the `Location` header. | Spec OFF-11, DEMO-9. |
+| A-6 | The landing pages in the spec are the prelanders, and the quiz is part of the prelander page. "Skip the quiz" (rule 1) and "skip the prelander" (business context) mean the same thing: a server-side redirect before the page renders. | Spec business context and rule 1 describe the same behaviour. |

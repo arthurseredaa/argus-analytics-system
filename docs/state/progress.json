@@ -1,0 +1,50 @@
+{
+  "$schema": "./progress.schema.json",
+  "plan": "docs/plans/part1-design-document.md",
+  "updated": "2026-11-02",
+  "stages": [
+    {
+      "id": 0,
+      "title": "Platform limits and BigQuery ingestion",
+      "status": "done",
+      "closed": "2026-11-02",
+      "verified": "grep -c \"developers.cloudflare.com\" docs/requirements/nfr.md (38, every service in the table has linked rows); the BigQuery note has cost and auth for all three methods; explain-back sentences for D1, Durable Objects, Queues and BigQuery accepted",
+      "notes": "Explain-back changed the plan: an external Postgres option and a migration section for ADR 0003; step_viewed events added, so the design load is 9 events per visit and 18M a month (A-1); an alert on the oldest file in R2 pending/ for ADR 0006. requirements.pdf is not committed (*.pdf in .gitignore). The commit hash is not recorded here because the state change is part of the same commit."
+    },
+    {
+      "id": 1,
+      "title": "Architecture decisions, hot path",
+      "status": "next"
+    },
+    {
+      "id": 2,
+      "title": "Architecture decisions, events, postbacks, BigQuery",
+      "status": "pending"
+    },
+    {
+      "id": 3,
+      "title": "Data model and event catalog",
+      "status": "pending"
+    },
+    {
+      "id": 4,
+      "title": "Metrics, reliability numbers, extensions",
+      "status": "pending"
+    },
+    {
+      "id": 5,
+      "title": "The design document and the diagram",
+      "status": "pending"
+    },
+    {
+      "id": 6,
+      "title": "MVP implementation plan and the end-to-end slice",
+      "status": "pending"
+    },
+    {
+      "id": 7,
+      "title": "Review rehearsal and sending",
+      "status": "pending"
+    }
+  ]
+}
