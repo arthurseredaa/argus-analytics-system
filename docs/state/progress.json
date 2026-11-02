@@ -24,8 +24,11 @@
     {
       "id": 2,
       "title": "Architecture decisions, events, postbacks, BigQuery",
-      "status": "in_progress",
-      "notes": "ADRs 0005 to 0007 written and checked against the stage checklist (buffer limits in events and hours at both rates, dedup key, HTTP answer per postback case, requirement ids). Explain-back not done yet: the life of one event from browser to BigQuery, and of one postback including a redelivery and a second real purchase. The stage closes after it."
+      "status": "done",
+      "closed": "2026-11-02",
+      "verified": "ADR 0005 buffer table gives events and hours at 6.9 and 200 events/s for every failure; ADR 0007 names the dedup key (partner_id, type, transaction_id) and the HTTP answer for malformed (400), unsigned or wrong signature (401), stale (401) and unknown-click (202, quarantine) postbacks; each ADR links its requirement ids; Arthur's hand-drawn diagram (docs/ai/examples/06-diagram.png) matches ADRs 0005 to 0007 after three rounds of corrections.",
+      "notes": "The explain-back was a diagram instead of spoken walk-throughs. It found gaps that were fixed in this commit: dead letter queue behaviour and redrive (ADR 0005), rejected/ retention and a 5-attempt limit on load jobs (ADR 0006), the loader's 9,000-file cap. Arthur decided one event per request, so the design cost is the unbatched column in nfr.md ($28.60 a month at 18M). The postback redelivery and second-purchase cases were settled while writing ADR 0007, not drawn. The ADRs were first committed in 0a66b3f; this closing commit adds the fixes.",
+      "commit": "0a66b3f"
     },
     {
       "id": 3,

@@ -47,13 +47,13 @@ Load jobs, a deduplicating view, and `payload` as a JSON column.
 The loader is a cron Worker that runs every 5 minutes in production (every minute in the MVP, where its target is D1, ADR 0005).
 
 1. List the files in `pending/`. If a manifest from an earlier run is unfinished, resume it first (step 6).
-2. Group the files into a batch of at most 50 MB, to stay well inside the Worker's memory. A larger backlog becomes several batches in the same run.
+2. Group the files into a batch of at most 50 MB, to stay well inside the Worker's memory. A larger backlog becomes several batches in the same run. One run takes at most 9,000 files, to stay inside the 10,000 subrequests a Worker invocation gets by default: each file costs one read, and the clean-up in step 6 costs one write per batch and one delete call per 1,000 files. A Queue outage leaves one file per event (ADR 0005), so this cap sets the drain rate in `nfr.md`; a larger backlog takes several runs.
 3. Write a manifest to R2 `batches/{batch_id}.json` with the file names and attempt number 1. The batch ID is derived from the sorted file names, so the same files always give the same ID.
-4. Read the files, and drop repeated EventIDs inside the batch: the first occurrence of each EventID is kept. Redeliveries from the Queue and quick resends from the browser arrive close in time and land in the same batch, so most duplicates stop here, before BigQuery. Rows that fail validation (not JSON, no well-formed `event_id`) go to R2 `rejected/` with an alert instead of failing the batch.
+4. Read the files, and drop repeated EventIDs inside the batch: the first occurrence of each EventID is kept. Redeliveries from the Queue and quick resends from the browser arrive close in time and land in the same batch, so most duplicates stop here, before BigQuery. Rows that fail validation go to R2 `rejected/` with an alert instead of failing the batch: not JSON, no well-formed `event_id`, or an envelope field whose type does not match its column, such as a `received_at` that is not a timestamp. Checking the envelope types here matters because with `maxBadRecords = 0` one such row would make BigQuery reject the whole batch.
 5. Start a load job with job ID `load_{batch_id}_{attempt}`: `NEWLINE_DELIMITED_JSON`, `WRITE_APPEND`, the table schema from the code, `ALLOW_FIELD_ADDITION`, `maxBadRecords = 0`, upload through the resumable protocol when the batch is large.
-6. Find out how the job ended. If the request timed out or the Worker restarted, ask BigQuery for the job by its ID. A `409` on creation means the job already exists, so the loader asks for its status instead of loading again. Done without errors: move the files to `loaded/` and close the manifest. Done with an error: raise the attempt number and start a new job, so a failed job is retried under a new ID and a successful one is never repeated.
+6. Find out how the job ended. If the request timed out or the Worker restarted, ask BigQuery for the job by its ID. A `409` on creation means the job already exists, so the loader asks for its status instead of loading again. Done without errors: write the batch as one file `loaded/{batch_id}.ndjson`, delete its files from `pending/` (up to 1,000 keys per call), and close the manifest. Done with an error: raise the attempt number and start a new job, so a failed job is retried under a new ID and a successful one is never repeated. After the fifth failed job the batch's files go to `rejected/` with an alert and the manifest is closed, so one bad batch cannot use up the daily 1,500 jobs. Only jobs that BigQuery ran and finished with an error count as attempts. When BigQuery cannot be reached or answers with a server error, the batch stays in `pending/` for the next run, so a BigQuery outage never sends data to `rejected/`.
 
-`loaded/` files are deleted by an R2 lifecycle rule after 30 days (bounded by Q-16); nothing in `pending/` is deleted automatically. 288 runs a day leave more than 1,200 jobs of the daily 1,500 for retries and split batches.
+`loaded/` and `rejected/` files are deleted by R2 lifecycle rules after 30 days (bounded by Q-16); for `rejected/` that is the window to act on the alert. To recover rejected data, fix the cause (a loader bug or the row itself) and move the file back to `pending/`; the next run loads it and the view hides anything loaded twice. Nothing in `pending/` is deleted automatically. 288 runs a day leave more than 1,200 jobs of the daily 1,500 for retries and split batches.
 
 ### Duplicates, three layers
 
@@ -91,7 +91,10 @@ A service account with permission to run jobs and write to this one dataset. The
 - `failed load job is retried under a new attempt id`.
 - `loader drops repeated event ids inside a batch`: a batch with the same event three times uploads one row.
 - `R-8 duplicate across batches appears once in the events view`.
-- `invalid row goes to rejected and the rest of the batch loads`.
+- `invalid row goes to rejected and the rest of the batch loads`, including a row whose `received_at` is not a timestamp.
+- `load job failing five times moves the batch to rejected`.
+- `BigQuery unavailable does not count as a load attempt`: with BigQuery unreachable for ten runs, the files stay in `pending/` and nothing reaches `rejected/`.
+- `a run takes at most 9,000 files`: 20,000 one-event files in `pending/` are loaded over three runs, once each.
 - `new payload field reaches BigQuery without a schema change` and `new envelope field is added by the load job`.
 - Fault test (P-8): stop the loader, send the demo traffic, check `pending/`, start the loader, compare the view's counts with the events sent.
 - Freshness: in staging, the newest row is never older than 15 minutes during normal traffic.
@@ -102,6 +105,7 @@ A service account with permission to run jobs and write to this one dataset. The
 - BigQuery error messages (`duplicate`, 409), checked 2026-11-02: https://docs.cloud.google.com/bigquery/docs/error-messages
 - BigQuery primary and foreign keys, checked 2026-11-02: https://docs.cloud.google.com/bigquery/docs/primary-foreign-keys
 - `jobs.insert` and the BigQuery API discovery document, checked 2026-11-02: https://docs.cloud.google.com/bigquery/docs/reference/rest/v2/jobs/insert, https://bigquery.googleapis.com/discovery/v1/apis/bigquery/v2/rest
+- R2 Workers API (`delete` takes up to 1,000 keys per call) and Workers limits (10,000 subrequests per invocation by default), checked 2026-11-02: https://developers.cloudflare.com/r2/api/workers/workers-api-reference/, https://developers.cloudflare.com/workers/platform/limits/
 - `docs/requirements/research-bigquery-ingestion.md`, `docs/requirements/nfr.md`.
 - ADR 0005 (files in R2, MVP stand-in).
 

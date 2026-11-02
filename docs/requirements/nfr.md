@@ -24,8 +24,10 @@ Every number about load, freshness, latency, retention or cost lives here with i
 | A-3 | Events in one peak | about 60,000 | 200 × 300 s | `open-questions.md` A-3 |
 | A-3 | Peak over average | about 29× | 200 / 6.94 | derived here |
 | NFR-5 | Buffer while BigQuery or the loader is down | files in R2 `pending/`, no limit except storage cost and Q-16 | R2 Standard $0.015/GB-month | ADR 0005 |
-| NFR-5 | Buffer while the consumer or R2 is down, at 6.9 events/s | 14 days, about 8.4M events (retention binds first) | 6.9 × 86,400 × 14 = 8.35M; at 1 KB, 8.4 GB of the 25 GB backlog | ADR 0005 |
+| NFR-5 | Automatic recovery while the consumer or R2 is down | about 5 hours of retries in the Queue | 1 + 2 + 4 + 8 + 16 + 32 + 4 × 60 = 303 minutes over 10 retries | ADR 0005 |
+| NFR-5 | Buffer in the dead letter queue after that, at 6.9 events/s | 14 days, about 8.4M events (retention binds first), redriven by hand | 6.9 × 86,400 × 14 = 8.35M; at 1 KB, 8.4 GB of the 25 GB backlog | ADR 0005 |
 | NFR-5 | Same, at 200 events/s sustained | about 35 hours (backlog binds first) | 25 GB / 1 KB = 25M events; 25M / 200 = 125,000 s | ADR 0005 |
+| NFR-5 | Loader drain of one-event files after a Queue outage | about 30 events/s, above the 6.9 average | 9,000 files per run / 300 s | ADR 0006 |
 | NFR-5 | Spec peak against the Queue backlog | 0.2% | 60,000 / 25M | ADR 0005 |
 | A-4 | Freshness for rule facts (Leads, offer status) | seconds, not minutes | the Lead return rule runs on the live path | `open-questions.md` A-4 |
 
@@ -50,7 +52,7 @@ Checked on 2026-11-01. Prices are in USD. "Paid" is the Workers Paid plan at $5/
 |---|---|---|---|---|
 | Workers | Requests | 100,000/day | 10M included, then $0.30/M | https://developers.cloudflare.com/workers/platform/pricing/ |
 | Workers | CPU time | 10 ms per request | 30M CPU ms included, then $0.02/M CPU ms; up to 5 min per request (default 30 s) | https://developers.cloudflare.com/workers/platform/pricing/ |
-| Workers | Subrequests per request | 50 | 10,000 | https://developers.cloudflare.com/workers/platform/limits/ |
+| Workers | Subrequests per request | 50 | 10,000 by default, configurable up to 10M (checked 2026-11-02) | https://developers.cloudflare.com/workers/platform/limits/ |
 | Workers | Memory per isolate; cron triggers per account; variable or secret size | 128 MB; 5; 5 KB | 128 MB; 250; 5 KB | https://developers.cloudflare.com/workers/platform/limits/ |
 | Workers | Static asset requests | free, unlimited | free, unlimited | https://developers.cloudflare.com/workers/platform/pricing/ |
 | D1 | Rows read | 5M/day | 25 billion included, then $0.001/M | https://developers.cloudflare.com/d1/platform/pricing/ |
@@ -114,10 +116,10 @@ Limits that can break the design at this load:
 - One D1 database holds at most 10 GB. 10 GB / 18M events = about 560 bytes per event per month, so raw events kept in D1 fill one database within months unless they are moved out or the database is split. This bounds MVP-5.
 - A single Durable Object takes about 1,000 requests/s. One object per user is far below that; one global object would be the bottleneck at 200 events/s only with heavy per-event work.
 - KV writes become visible elsewhere after up to 60 seconds. A-4 needs Leads and offer status visible to selection within seconds, so KV does not fit rule facts.
-- Queues keep messages for at most 14 days on Paid and 24 hours on Free. That is the ceiling for the buffer in NFR-5 if Queues is the buffer.
+- Queues keep messages for at most 14 days on Paid and 24 hours on Free. That is the ceiling for the buffer in NFR-5 if Queues is the buffer; with retries and a dead letter queue (ADR 0005), it is the ceiling for the dead letter queue.
 - BigQuery allows 1,500 load jobs per table per day, one every 58 seconds at most. A load every 5 minutes is 288 jobs.
 
-Rough monthly cost on Paid, BigQuery excluded. The 18M columns are the design load; the 12M columns are the spec's figure, kept for comparison.
+Rough monthly cost on Paid, BigQuery excluded. The 18M columns are the design load; the 12M columns are the spec's figure, kept for comparison. The browser sends one event per request (ADR 0005), so the design cost is the "18M, no batching" column, $28.60; the batched columns show what batching in the browser would save.
 
 | Item | 12M, no batching | 12M, 10 events per request and per message | 18M, no batching | 18M, 10 events per request and per message |
 |---|---|---|---|---|

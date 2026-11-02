@@ -35,3 +35,14 @@ Stage 1 of `docs/plans/part1-design-document.md` now lists an external Postgres 
 ## 2026-11-02: step views added to the event catalog
 
 A visit now produces 9 events instead of 6: a `step_viewed` event for each quiz step joins the list in A-1 (`docs/requirements/open-questions.md`). Arthur asked for it: going back to a step and changing an answer is a product signal, and answer events alone do not show a return that left the answer unchanged or the time spent on a step. Q-13 already defined "started the quiz" as step 1 shown, which needed a view event. The design is now sized for 18M events a month against the spec's 12M; `nfr.md` carries both figures and the cost table for each. Stage 3 catalogs nine visit events and stage 4 prices the design load. The acceptance checks for ID-4 and NFR-1 expect nine events.
+
+## 2026-11-02: one event per request, and gaps closed in ADRs 0005 and 0006
+
+Arthur's explain-back for stage 2 was a drawing of the event and postback paths. Checking it against ADRs 0005 and 0006 found three gaps, and his questions settled one open choice.
+
+- The browser sends exactly one event per request, at every product step (Arthur's decision). The design cost is now the unbatched column in `nfr.md`, $28.60 a month at 18M events instead of $6.76. Reason: no event waits in the browser for a batch, and the client has no batching logic.
+- ADR 0005 said the Queue holds events for 14 days while R2 is down, but after 10 retries the messages would move to the dead letter queue within minutes. Retries now back off from 1 minute to 1 hour (about 5 hours in total), and a redrive script sends dead letter messages back within its 14 days.
+- ADR 0006 had no retention for `rejected/` and no limit on load job attempts, so one bad batch could have used up the daily 1,500 jobs. Now `rejected/` keeps files for 30 days, a batch goes there after five failed jobs, BigQuery outages do not count as attempts, and the loader checks envelope types before loading.
+- One-event files after a Queue outage are many; the loader takes at most 9,000 files a run, which drains about 30 events/s.
+
+Stage 4 prices the design at the unbatched figure. No stage was added or moved.
