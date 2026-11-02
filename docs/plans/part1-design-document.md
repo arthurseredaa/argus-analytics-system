@@ -107,7 +107,7 @@ Read first: `docs/requirements/offer-selection.md` whole, open questions Q-1, Q-
 
 Decisions for Arthur, each asked with AskUserQuestion:
 
-1. Identity (ADR 0002). Options: first-party cookie with a random UserID set by the Worker; browser storage ID sent in the event payload; email as identity. The spec rules out the third, so the ADR records why. Review focus item 4 is partly answered here: EventID is generated where the identity is.
+1. Identity (ADR 0002). Options: first-party cookie with a random UserID set by the Worker; browser storage ID sent in the event payload; email as identity. The spec rules out the third, so the ADR records why. Review focus item 4 is partly answered here: an EventID is generated where the event is created, in the browser for browser events and in the Worker for server events.
 2. Operational store (ADR 0003). Options: D1 as the single store for both facts and events; Durable Object per user for facts plus D1 for events; KV for facts; an external Postgres (Neon, Supabase or similar) reached from the Worker over the network. The ADR shows the demo scenario written into each option and where each one breaks at 200 events/s. For Postgres it records why it was set aside: one more provider to pay for and monitor, and a network round trip to its region on every request. It also has a migration section: the D1 numbers that trigger a move (write latency, database size against the 10 GB limit), which target we would move to (Postgres, or Durable Objects to split the load), and the steps, so the move is planned before it is needed. Review focus item 3 is answered here: where offer status lives and where it is re-read at redirect time.
 3. Selection semantics (ADR 0004). Not a storage choice but a rules choice with alternatives: several active Leads (most recent, highest EPU, lowest ID); the Q-1 reading of rule 3; whether selection runs at entry, at completion, or both. The decision table in `offer-selection.md` is updated if a row changes.
 
@@ -203,7 +203,7 @@ Decisions for Arthur:
 
 Content:
 
-- Metric definitions table: name, numerator, denominator, grain (prelander, offer, day), repeat-visit rule.
+- Metric definitions table: name, numerator, denominator, grain (prelander, offer, day), repeat-visit rule. Answer metrics say which answer they count. D1 keeps only the latest answer per question, while BigQuery has every answer event, so counting answer events would overstate an answer that users later changed. The answer distribution counts distinct users by their final answer (the answers recorded in the `offer_selected` event, or the latest answer per user and question by the same ordering rule as D1). Answer changes are a separate metric over all answer events: users with more than one answer to a step, and the A to B transitions.
 - Reliability table: freshness target, buffer survival hours (from ADR 0005), alert thresholds, what a reviewer would see during an outage. One of the alerts is the age of the oldest file in `pending/` (ADR 0006), threshold 1 hour: past it, loads into BigQuery have stopped.
 - Cost table at the design load in `nfr.md` (18M events/month, A-1) on the chosen services, with the platform limits table in `nfr.md` as the source, and the free-plan ceiling for the MVP.
 - MVP storage limits (MVP-5): the number at which D1 or the chosen store gets close to its limit, how we notice (a metric and a threshold), what moves to BigQuery and what stays because the rules need it (Leads, offer status). The alert thresholds match the migration triggers in ADR 0003.

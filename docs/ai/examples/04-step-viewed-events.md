@@ -79,4 +79,4 @@ Arthur's proposal was accepted: a `step_viewed` event for each of the 3 quiz ste
 - Files changed: `open-questions.md` (A-1, A-3, Q-4, Q-13), `nfr.md` (design load rows, cost table with 12M and 18M columns), `glossary.md`, `research-bigquery-ingestion.md`, `part1-design-document.md` (stages 2 to 4), `acceptance-checks.md` (ID-4, NFR-1), `plan-history.md`.
 - Cost arithmetic, from the prices in `nfr.md`: with batches of 10, Queues 18M × 3 / 10 = 5.4M operations − 1M included = 4.4M × $0.40 = $1.76, total $6.76 a month against $6.04 at 12M.
 - `grep -rn -i -E "six (visit )?events|6 events|4\.6 events" docs` outside the plan history finds only `requirements.md` NFR-1, which restates the spec, and the A-1 row itself.
-- Commit: pending, part of the first commit of the repository.
+- Commit: `fbd3e73`, the first commit of the repository.

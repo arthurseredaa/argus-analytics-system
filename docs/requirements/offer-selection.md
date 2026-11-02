@@ -40,9 +40,9 @@ The universal offer never takes part in step 4, even if its EPU is higher than e
 
 ## Several Leads (the spec asks us to propose this)
 
-Options, to be settled in an ADR:
+Options, settled in ADR 0004:
 
-1. Most recent Lead wins (by the time we accepted the postback). Follows the user's latest registration. Default proposal.
+1. Most recent Lead wins (by the time we accepted the postback). Follows the user's latest registration. Chosen in ADR 0004.
 2. Highest EPU among Lead offers. Maximises expected revenue but can send the user back to an older registration.
 3. First Lead wins. Stable, but ignores newer registrations.
 
@@ -52,7 +52,7 @@ Disabled-offer Leads are filtered out before any of these apply.
 
 | Case | Proposed behaviour | Question |
 |---|---|---|
-| Returning user, no Lead, sufficient answers | Show the quiz again, prefilled | Q-1 |
+| Returning user, no Lead, sufficient answers | Show the quiz again, empty; prefilling is asked in Q-1 | Q-1, ADR 0004 |
 | Lead offer no longer matches the current answers | Rule 1 still applies: redirect to the Lead offer | none, spec is explicit |
 | Purchase without an earlier Lead | Counts as a Purchase; does not give a redirect right | Q-8 |
 | Lead for the universal offer 007 | Same as any Lead: redirect to 007 while it is active | none |
@@ -91,7 +91,7 @@ All offers active unless the "Catalog change" column says otherwise. "Lead" list
 | 22 | women + asia | 001 then 004 | none | 004 (option 1) | lead_return | proposal |
 | 23 | women + asia | 001 then 004 | 004 disabled | 001 | lead_return | spec rules 1 and 3 |
 | 24 | none | none | none | quiz | new user | spec |
-| 25 | women + asia, at entry | none | none | quiz, prefilled | returning without Lead | Q-1 |
+| 25 | women + asia, at entry | none | none | quiz, empty | returning without Lead | Q-1, ADR 0004 |
 | 26 | women + asia, email `a@example.com` | none | none | 003, no Lead created | best_epu | spec QZ-3 |
 | 27 | men + europe | 001 | none | 001, quiz skipped | lead_return, answers ignored | spec rule 1 |
 | 28 | women + asia | 001 | 001 removed | 003, quiz skipped | best_epu | spec rule 3 |

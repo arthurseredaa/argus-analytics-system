@@ -124,3 +124,22 @@ Rough monthly cost on Paid, BigQuery excluded. The 18M columns are the design lo
 | Total | $19.60 | $6.04 | $28.60 | $6.76 |
 
 "No batching" means one request, one message and one row per event. Unbatched at 18M, the 30M included CPU ms cover an average of 1.7 ms per request (30M / 18M). Routing every event through a Durable Object as well would add 18M − 1M = 17M × $0.15 = $2.55. BigQuery ingestion at 18M costs at most about $0.90 a month (REST streaming at the 1 KB row minimum, 18 GB); the gRPC API and batch loads stay within their free tiers.
+
+### Size of the rule facts in D1
+
+ADR 0003 keeps the facts the rules need (users, current answers, clicks, postbacks, the offer catalog) in one D1 database and keeps raw events out of it. One database holds at most 10 GB. Estimate made on 2026-11-02:
+
+- About 1 KB per user for the user row, current answers, clicks and indexes. This is an assumption; the MVP measures the real figure with the database size divided by the user count.
+- 1,000,000 users a month (NFR-1). If every user is new and nothing is deleted, that is about 1 GB a month and the database is full in about 10 months.
+- Cleanup: a user with no Lead who has not returned for 90 days is deleted from D1. Their events stay in R2 and BigQuery. The rules lose nothing: a returning user without a Lead sees an empty quiz anyway (Q-1, ADR 0004).
+- Users with a Lead are kept: 5% to 20% of users (A-7), so 50,000 to 200,000 a month, which is 0.05 to 0.2 GB a month.
+
+| | Lead rate 5% | Lead rate 20% |
+|---|---|---|
+| Users without a Lead, last 90 days | about 3 GB | about 3 GB |
+| Lead users added per month | about 0.05 GB | about 0.2 GB |
+| Size after 12 months | about 3.6 GB | about 5.4 GB |
+| Size after 24 months | about 4.2 GB | about 7.8 GB |
+| Months until the 7 GB migration trigger (70% of 10 GB) | (7 − 3) / 0.05 = about 80 | (7 − 3) / 0.2 = about 20 |
+
+The 90-day window counts all users as new, so it is an upper bound. Conclusion: with the cleanup, one D1 database carries the rule facts for at least about 20 months at the spec's load, and for years at a low Lead rate. The 7 GB trigger and the migration path to Postgres are in ADR 0003. If traffic grows several times over, the trigger comes sooner by the same factor.

@@ -171,7 +171,7 @@ Expected: the state has a `user_id` and a properties object. The event without a
 
 Depends on: ADR 0002.
 
-Automated: `pnpm test -- -t "ID-2"`. Cases: `ID-2 second visit with the same cookie keeps the user id`, `ID-2 R-1 visit without the cookie creates a new user`.
+Automated: `pnpm test -- -t "ID-2"`. Cases: `ID-2 second visit with the same cookie keeps the user id`, `ID-2 R-1 visit without the cookie creates a new user`, `ID-2 malformed cookie value is replaced`, `ID-2 user id in the event body is ignored`.
 
 Manual:
 1. `curl -s -c $JAR -b $JAR -D - -o /dev/null $BASE/p/demo` twice.

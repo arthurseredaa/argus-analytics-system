@@ -75,4 +75,4 @@ Claude, 14:12:10 UTC:
 - `grep -c -i postgres docs/plans/part1-design-document.md` returns 1: the stage 1 line for ADR 0003 lists the Postgres option and the migration section.
 - `docs/ai/plan-history.md` has the entry "2026-11-02: Postgres option and a migration path in ADR 0003".
 - ADR 0003 itself is not written yet (block 1). This example is complete once the ADR contains the option row and the migration section.
-- Commit: pending, part of the first commit of the repository.
+- Commit: `fbd3e73`, the first commit of the repository.

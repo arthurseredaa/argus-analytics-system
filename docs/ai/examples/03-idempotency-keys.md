@@ -95,4 +95,4 @@ Claude, 14:38:33 UTC:
 - The spec was re-read (`pdftotext requirements.pdf`): it asks us to propose the postback contract and does not fix its fields, and it states that a redelivered message and a second real purchase are different cases.
 - `docs/requirements/proposals.md` P-4 and `docs/requirements/risks.md` R-4, R-5 already state the same keys, so no requirement file changed.
 - The automated checks come with the implementation: TEST-3 in `requirements.md` (same postback twice counts once, two purchases count twice).
-- Commit: pending, part of the first commit of the repository.
+- Commit: `fbd3e73`, the first commit of the repository.
