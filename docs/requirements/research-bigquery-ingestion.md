@@ -58,8 +58,8 @@ Batch load jobs from files buffered in R2, on a cron trigger. They are free, fit
 
 To check in stage 2 before ADR 0006 is accepted:
 
-- the upload size limit of the load job upload endpoint;
-- whether a repeated job ID makes a load idempotent;
+- the upload size limit of the load job upload endpoint: checked 2026-11-02, no maximum in the API description and a resumable protocol exists; the Worker's 128 MB memory is the real limit (ADR 0006);
+- whether a repeated job ID makes a load idempotent: checked 2026-11-02, yes, a job ID that exists gives `duplicate`, HTTP 409 (ADR 0006);
 - EU multi-region prices (Q-2, Q-18);
 - whether BigQuery accepts a self-signed JWT;
 - whether a Worker can hold a bidirectional gRPC stream.

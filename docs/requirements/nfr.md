@@ -23,6 +23,10 @@ Every number about load, freshness, latency, retention or cost lives here with i
 | A-3 | Average event rate | about 6.9 events/s (4.6 at the spec's 12M) | 18,000,000 / 30 days / 86,400 s = 6.94 | `open-questions.md` A-3 |
 | A-3 | Events in one peak | about 60,000 | 200 × 300 s | `open-questions.md` A-3 |
 | A-3 | Peak over average | about 29× | 200 / 6.94 | derived here |
+| NFR-5 | Buffer while BigQuery or the loader is down | files in R2 `pending/`, no limit except storage cost and Q-16 | R2 Standard $0.015/GB-month | ADR 0005 |
+| NFR-5 | Buffer while the consumer or R2 is down, at 6.9 events/s | 14 days, about 8.4M events (retention binds first) | 6.9 × 86,400 × 14 = 8.35M; at 1 KB, 8.4 GB of the 25 GB backlog | ADR 0005 |
+| NFR-5 | Same, at 200 events/s sustained | about 35 hours (backlog binds first) | 25 GB / 1 KB = 25M events; 25M / 200 = 125,000 s | ADR 0005 |
+| NFR-5 | Spec peak against the Queue backlog | 0.2% | 60,000 / 25M | ADR 0005 |
 | A-4 | Freshness for rule facts (Leads, offer status) | seconds, not minutes | the Lead return rule runs on the live path | `open-questions.md` A-4 |
 
 ## Still to be set
@@ -31,7 +35,6 @@ These are required by the spec but have no number yet. The stage of `docs/plans/
 
 | ID | Figure | Set in |
 |---|---|---|
-| NFR-5 | Buffer capacity and hours of survival at 6.9 and at 200 events/s during a BigQuery outage | stage 2, ADR 0005 |
 | NFR-6 | Target p95 latency for the selection endpoint and for event ingestion, with the measurement method | stage 4 |
 | MVP-5 | Storage size at which the chosen store approaches its limit, and the metric that signals it | stage 4 |
 | Q-16 | Retention of email and raw events | company answer |
@@ -73,6 +76,7 @@ Checked on 2026-11-01. Prices are in USD. "Paid" is the Workers Paid plan at $5/
 | Queues | Throughput per queue | 5,000 messages/s | 5,000 messages/s | https://developers.cloudflare.com/queues/platform/limits/ |
 | Queues | Message size; consumer batch; `sendBatch` per call | 128 KB; up to 100 messages, wait up to 60 s; 100 messages or 256 KB | same | https://developers.cloudflare.com/queues/platform/limits/ |
 | Queues | Retries; consumer concurrency | up to 100; up to 250 | same | https://developers.cloudflare.com/queues/platform/limits/ |
+| Queues | Backlog per queue; behaviour when full | 25 GB; `send()` fails with "Storage Limit Exceeded" (checked 2026-11-02) | same | https://developers.cloudflare.com/queues/platform/limits/ |
 | R2 (Standard) | Storage | 10 GB-month/month | $0.015/GB-month | https://developers.cloudflare.com/r2/pricing/ |
 | R2 (Standard) | Class A operations (writes, lists) | 1M/month | $4.50/M | https://developers.cloudflare.com/r2/pricing/ |
 | R2 (Standard) | Class B operations (reads) | 10M/month | $0.36/M | https://developers.cloudflare.com/r2/pricing/ |
@@ -82,7 +86,7 @@ Checked on 2026-11-01. Prices are in USD. "Paid" is the Workers Paid plan at $5/
 | Analytics Engine | Billing status | not billed at the moment, per the pricing page | same | https://developers.cloudflare.com/analytics/analytics-engine/pricing/ |
 | Analytics Engine | Retention; data points per Worker invocation; fields per data point | 3 months; 250; 20 blobs, 20 doubles, 1 index | same | https://developers.cloudflare.com/analytics/analytics-engine/limits/ |
 | Pipelines | Price | the pricing page lists Workers Paid only | ingress free; SQL transforms 50 GB included, then $0.04/GB; sink to R2 50 GB included, then $0.03/GB JSON or $0.06/GB Parquet | https://developers.cloudflare.com/pipelines/platform/pricing/ |
-| Pipelines | Limits | | 20 streams, 20 pipelines, 20 sinks per account; 5 MB per ingestion request; 1 GB/s per stream; delivery interval to R2 not stated | https://developers.cloudflare.com/pipelines/platform/limits/ |
+| Pipelines | Limits | | 20 streams, 20 pipelines, 20 sinks per account; 5 MB per ingestion request; 1 GB/s per stream; R2 sink rolls a file every 300 s by default, at least every 10 s; JSON or Parquet; exactly-once delivery to R2 per the docs; renamed Basin Pipelines and generally available (checked 2026-11-02) | https://developers.cloudflare.com/pipelines/platform/limits/, https://developers.cloudflare.com/pipelines/sinks/available-sinks/r2/ |
 
 ### BigQuery
 

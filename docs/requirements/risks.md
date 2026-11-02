@@ -23,7 +23,7 @@ Things that can break correctness, cost or the delivery itself. "Mitigation" is 
 |---|---|---|---|---|
 | R-11 | Forged postbacks. | Fake revenue, wrong redirects for real users. | Signature or per-partner secret; timestamp window against replay; random, non-guessable click IDs. | Tests for missing, wrong and stale signatures. |
 | R-12 | Email leaks into URLs or logs (query string, error messages, request logging, Cloudflare logs). | Breaks a spec rule and GDPR. | Email only in POST bodies; no request-body logging; redact in error handling; never in analytics. | Test that searches captured logs for a test email. |
-| R-13 | Partners only support GET postbacks with a token in the URL. | Tokens end up in partner and proxy logs. | Per-partner tokens that can be rotated; IP allowlist where possible. | Covered by Q-6. |
+| R-13 | Partners only support GET postbacks with a token in the URL. | Tokens end up in partner and proxy logs. | Not offered: the contract accepts only signed POST requests (ADR 0007). If a real partner can only send GET, a new ADR decides how, with per-partner rotating tokens and an IP allowlist as the starting point. | Covered by Q-6; `PB-3 unsigned postback is rejected and changes nothing`. |
 | R-14 | Event spam or bots. | Polluted funnel, higher cost. | Rate limiting per IP and per user; payload size limits. | Load test includes abusive client. |
 
 ## Scale and cost
