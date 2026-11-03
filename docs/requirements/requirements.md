@@ -8,8 +8,8 @@ Related files: [offer-selection.md](offer-selection.md) (rules and decision tabl
 
 | ID | Requirement | Part | Verify |
 |---|---|---|---|
-| PRC-1 | The design is done first and discussed with the company. Implementation scope is agreed after that discussion. | 1 | Design sent before any code. |
-| PRC-2 | Access to a test Cloudflare environment, possible costs and the final scope are agreed before implementation. | 1 | Written agreement before Part 2 starts. |
+| PRC-1 | The design is done first and discussed with the company. Implementation scope is agreed after that discussion. Changed by the company's answer of 2026-10-30: no separate design review, the whole assignment is delivered at once, a call afterwards is optional (`docs/ai/plan-history.md`, 2026-11-03). | 1 | Design is in the repository before the code; the open questions are delivered with their defaults. |
+| PRC-2 | Access to a test Cloudflare environment, possible costs and the final scope are agreed before implementation. Per the same answer, no agreement step exists; the MVP runs on Arthur's own account (Q-17) and the scope is the spec as broken down here. | 1 | Q-17 default stated in the design; spend reported in the README. |
 | PRC-3 | Production access and extra external environments are not needed for the MVP. | 2 | No production access requested. |
 | PRC-4 | Ambiguous expectations are recorded before implementation. | 1 | `open-questions.md` answered or assumed before coding. |
 

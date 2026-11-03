@@ -41,7 +41,10 @@
     {
       "id": 4,
       "title": "Metrics, reliability numbers, extensions",
-      "status": "pending"
+      "status": "done",
+      "closed": "2026-11-03",
+      "verified": "docs/design/metrics-and-operations.md: 29 metric rows with ids M-1 to M-29, none with an empty denominator; 29 links to nfr.md; nfr.md has the p95 targets (50 / 300 / 500 ms) and the alert thresholds in a 'Set in stage 4' table and no longer lists NFR-6 or MVP-5 as unset; both extensions name select() step 1 or step 5 and a concrete table (offers.exclude_after_purchase, offer_epu_observed, conversions.payout_minor); no @ outside @example.com; 0 em or en dashes; all 15 relative links resolve. Explain-back: Arthur worked through the late-postback example himself and concluded 'two separate reports' (docs/ai/examples/08).",
+      "notes": "Decisions: funnel denominators are distinct users per (prelander, UTC day) with start = step 1 shown; two report views, cohort by click date with an 'as of' time and finance by postback acceptance time; latency p95 measured in the Worker (events 50 ms, selection and postbacks 300 ms), external probe from EU and US at 500 ms. The file was drafted by an Opus subagent; Fable replaced its seeded probe user with GET /__probe (no events, no cleanup exception), made an excluded-after-Purchase offer behave like a disabled one (rule 3) instead of a vanished Lead, and noted 18M Workers requests as an upper bound. Also in this commit: the company's 2026-10-30 answer (no separate design review, one delivery) recorded in plan-history, requirements PRC-1/PRC-2, CLAUDE.md and the plan; stage 7 retitled. Open items: DES-5 decision-table rows live in the metrics file until implemented; Checkly free-tier limits to check; Analytics Engine sampling and Cloudflare notification types to confirm during implementation."
     },
     {
       "id": 5,
@@ -55,7 +58,7 @@
     },
     {
       "id": 7,
-      "title": "Review rehearsal and sending",
+      "title": "Self-review; sending moved to the end of Part 2 (plan history 2026-11-03)",
       "status": "pending"
     }
   ]

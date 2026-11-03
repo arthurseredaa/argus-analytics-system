@@ -60,3 +60,16 @@ Stage 3 (data model) of `docs/plans/part1-design-document.md` changed when answe
 - The D1 size estimate in `nfr.md` will be revisited in stage 4, because only users who complete the quiz are stored.
 
 ADR 0003 is not superseded. The table and the upsert are the same. Only the moment of the write and the ordering key, which the ADR left to the data model, are fixed here. `docs/testing/acceptance-checks.md` was updated to the new flow (conventions table, shell helpers, the cards that used `/api/select` or per-step storage, and the email scan in DEMO-8 and R-12). No stage was added or moved.
+
+## 2026-11-03: no separate design review, one delivery
+
+The company answered on 2026-10-30 that it does not review a design on its own before the rest of the work: the whole assignment is delivered at once, with a call about the solution offered afterwards if we want one. Both proposed dates were accepted (the design by 2026-11-02, the MVP about a week later). Arthur decided on 2026-11-03 to deliver everything as one scope and not to negotiate further.
+
+What changes:
+
+- Nothing is sent after stage 7. The design, the MVP and the AI work log go to the company together, so stage 7 becomes a self-review and the cover message moves to the end of Part 2.
+- The implementation starts right after stage 4. Stages 5 (design document and diagram) and 6 (MVP plan and end-to-end slice) are done in one session, and stage 6 produces the Part 2 plan with its own stages in `docs/plans/`.
+- Open questions keep their defaults; the company will see them in the repository, and the defaults are now the decisions the MVP implements. PRC-1 and PRC-2 in `requirements.md` carry the company's answer.
+- The Cloudflare account and spend stay as Q-17 assumes: Arthur's own account, the cheapest plan the design needs, spend reported.
+
+Why: the two-step format was our proposal, not the company's requirement, and waiting for a review that will not happen costs the days the MVP needs.

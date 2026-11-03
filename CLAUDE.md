@@ -1,6 +1,6 @@
 # Funnels analytics events system
 
-Paid test assignment for Unicorn Pro (Senior Full-Stack Engineer, AI & Automation). The spec is `requirements.pdf`, written in Ukrainian. Part 1 is a system design that must be sent to the company and discussed before any implementation starts. Part 2 is an MVP deployed to Cloudflare; its scope is agreed after the design review.
+Paid test assignment for Unicorn Pro (Senior Full-Stack Engineer, AI & Automation). The spec is `requirements.pdf`, written in Ukrainian. Part 1 is a system design, Part 2 an MVP deployed to Cloudflare. The spec describes a design review between the two, but the company said on 2026-10-30 that it does not do one: everything is delivered at once (`docs/ai/plan-history.md`, entry of 2026-11-03). The design is still written before the code, and open questions keep the defaults the MVP implements.
 
 ## Language
 

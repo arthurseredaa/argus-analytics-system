@@ -31,14 +31,41 @@ Every number about load, freshness, latency, retention or cost lives here with i
 | NFR-5 | Spec peak against the Queue backlog | 0.2% | 60,000 / 25M | ADR 0005 |
 | A-4 | Freshness for rule facts (Leads, offer status) | seconds, not minutes | the Lead return rule runs on the live path | `open-questions.md` A-4 |
 
+## Set in stage 4
+
+Set on 2026-11-03 in stage 4 of `docs/plans/part1-design-document.md`. The definitions, the measurement method and the alerts that use these figures are in `docs/design/metrics-and-operations.md`. Platform figures come from the limits table below.
+
+| ID | Figure | Value | Arithmetic or method | Source |
+|---|---|---|---|---|
+| NFR-6 | p95 latency of `POST /api/events`, server side | at most 50 ms over a rolling 15-minute window | validation and one Queue send, no D1 | Arthur's decision, 2026-11-03 |
+| NFR-6 | p95 latency of `GET /p/{prelander}`, `POST /api/complete`, `GET /go/{offer}`, server side | at most 300 ms over a rolling 15-minute window | one D1 batch to a database in one region | Arthur's decision, 2026-11-03; geography from Q-2, NFR-7 |
+| NFR-6 | p95 latency of `POST /postback/v1/{partner}`, server side | at most 300 ms over a rolling 15-minute window | signature check, click lookup, one insert | Arthur's decision, 2026-11-03 |
+| NFR-6 | Round trip from a US user to a D1 database in the EU | about 100 to 150 ms | estimate, not measured; the probe measures it | Arthur's estimate, 2026-11-03 |
+| NFR-6 | Synthetic probe, end to end | p95 at most 500 ms; every 5 minutes from one EU and one US location; alert after two consecutive failures | `GET /__probe`: the entry D1 batch for a UserID without rows, no events | Arthur's decision, 2026-11-03 |
+| NFR-6 | Allowed difference between k6 and the dashboard for the same window | 20% | | Arthur's decision, 2026-11-03 |
+| NFR-6 | Latency data points in Analytics Engine | about 18M a month, one per request; $0 today, $2.00 a month if billing starts | 18M − 10M included = 8M × $0.25 | platform limits, Analytics Engine |
+| NFR-6 | Probe traffic | about 580 Worker requests a day, no events | 2 locations × 288 runs | derived here |
+| NFR-3 | Freshness in production, normal operation | up to 30 s consumer wait, plus up to 5 minutes to the next loader run, plus the load job; alert above 15 minutes | | ADR 0005, ADR 0006 |
+| NFR-3 | Freshness in the MVP | about a minute | up to 30 s consumer wait plus a loader run every minute | ADR 0005 |
+| MVP-5 | MVP events database at the design load, 560 bytes a row | 10 GB (Paid) full in about a month; 500 MB (Free) in under two days | 18M × 560 B = about 10 GB a month; 600,000 × 560 B = about 336 MB a day | "What these numbers mean for the design" below |
+| MVP-5 | Same, at 1 KB a row | 10 GB in about 17 days; 500 MB in under a day | 600,000 × 1 KB = 600 MB a day; 10 GB / 600 MB = 16.7 | A-1, 1 KB per event as in ADR 0005 |
+| MVP-5 | MVP events database at the Free ceiling of about 3,300 events a day | 500 MB lasts about 5 to 9 months | 3,300 × 1 KB = 3.3 MB a day, 150 days; 3,300 × 560 B = 1.85 MB a day, 270 days | derived here |
+| MVP-5 | Size alert on both D1 databases (`d1_events_size`, `d1_facts_size`) | 7 GB on Paid, 350 MB on Free | 70% of 10 GB and of 500 MB | ADR 0003 migration trigger |
+| NFR-6 | Selection p95 alert (`selection_p95`) | above 300 ms over 15 minutes | same as the target | ADR 0003 migration trigger two |
+| NFR-6 | D1 overload alert (`d1_overload_errors`) | more than 10 in an hour | a starting value | ADR 0003 migration trigger three; Arthur's decision, 2026-11-03 |
+| NFR-6 | Worker error alert (`worker_5xx_rate`) | above 1% of requests over 5 minutes | | Arthur's decision, 2026-11-03 |
+| DES-6 | Observed EPU window and threshold | trailing 30 days by click date; observed EPU replaces the constant when the window has at least 500 users (a starting value) | | Arthur's decision, 2026-11-03 |
+| NFR-1 | R2 operations at the design load | about 215,000 Class A and 180,000 Class B a month, within the free 1M and 10M: $0 | 18M / 100 events per file = 180,000 writes; 8,640 loader runs × about 4 lists and writes = about 35,000; each file read once | platform limits, R2 |
+| NFR-1 | R2 storage at the design load | about 18 GB-month, $0.12 a month | `loaded/` kept 30 days × 0.6 GB a day at 1 KB per event; (18 − 10 free) × $0.015 | platform limits, R2; ADR 0006 |
+| NFR-1 | BigQuery storage at the design load | about 18 GiB more each month; $0.18 in month 1, about $4.74 in month 12 | (18 − 10 free) × $0.023; (216 − 10) × $0.023 | BigQuery limits below |
+| NFR-1 | Monthly total at the design load | $28.90 in month 1 ($30.90 if Analytics Engine is billed); about $33.50 in month 12 ($35.50) | $28.60 below + R2 $0.12 + BigQuery $0.18; BigQuery storage adds about $0.41 a month | derived here |
+
 ## Still to be set
 
 These are required by the spec but have no number yet. The stage of `docs/plans/part1-design-document.md` that sets each one is named.
 
 | ID | Figure | Set in |
 |---|---|---|
-| NFR-6 | Target p95 latency for the selection endpoint and for event ingestion, with the measurement method | stage 4 |
-| MVP-5 | Storage size at which the chosen store approaches its limit, and the metric that signals it | stage 4 |
 | Q-16 | Retention of email and raw events | company answer |
 | Q-17 | Acceptable monthly spend | company answer |
 
@@ -137,6 +164,7 @@ ADR 0003 keeps the facts the rules need (users, current answers, clicks, postbac
 
 - About 1 KB per user for the user row, current answers, clicks and indexes. This is an assumption; the MVP measures the real figure with the database size divided by the user count.
 - 1,000,000 users a month (NFR-1). If every user is new and nothing is deleted, that is about 1 GB a month and the database is full in about 10 months.
+- Since stage 3 the `users` row is created only at quiz completion (`docs/design/data-model.md`), so 1,000,000 users a month is an upper bound; the share of users who complete the quiz is not known yet. The cleanup and the 7 GB trigger below are unchanged.
 - Cleanup: a user with no Lead who has not returned for 90 days is deleted from D1. Their events stay in R2 and BigQuery. The rules lose nothing: a returning user without a Lead sees an empty quiz anyway (Q-1, ADR 0004).
 - Users with a Lead are kept: 5% to 20% of users (A-7), so 50,000 to 200,000 a month, which is 0.05 to 0.2 GB a month.
 

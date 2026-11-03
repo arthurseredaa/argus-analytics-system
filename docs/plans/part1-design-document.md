@@ -300,7 +300,7 @@ Steps:
 - [ ] Draft the cover message to Alina: what is in the repository, the five to seven questions, the proposed slice, the assumption about geography and the Cloudflare account, a proposed time for the discussion. Arthur edits and sends it himself.
 - [ ] Approval, commit `docs: AI work log for Part 1`, push.
 
-After sending: stop. Nothing from Part 2 starts until the scope is agreed (R-21, PRC-1).
+Changed 2026-11-03: nothing is sent after this stage. The company does not review the design separately (`docs/ai/plan-history.md`), so the cover message is written at the end of Part 2 and the grill-me and evolution drills run before the hand-in. Stage 6 produces the Part 2 plan, and implementation starts from it.
 
 ---
 
