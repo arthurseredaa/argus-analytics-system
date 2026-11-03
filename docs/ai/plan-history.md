@@ -46,3 +46,17 @@ Arthur's explain-back for stage 2 was a drawing of the event and postback paths.
 - One-event files after a Queue outage are many; the loader takes at most 9,000 files a run, which drains about 30 events/s.
 
 Stage 4 prices the design at the unbatched figure. No stage was added or moved.
+
+## 2026-11-03: answers and email written at quiz completion
+
+Stage 3 (data model) of `docs/plans/part1-design-document.md` changed when answers and the email reach D1. Arthur made the call in the session.
+
+- Answers and email arrive in one request. At quiz completion the browser sends `POST /api/complete` with `{"answers":{...},"email":"..."}`, and the Worker answers with the offer (`offer_id`, `name`, `url`, `reason`, `catalog_version`). This replaces `POST /api/select`. Per-step events are analytics only and never write D1. The latest accepted answer is the completion request the server received last, so answer ordering by `seq` or `client_time` no longer matters for D1. A user who stops before the email step has no rows in D1.
+- The email exists only in the `/api/complete` body and in `users.email_enc` and `users.email_hash`. The event envelope (`event_id`, `schema_version`, `type`, `client_time`, `visit_id`, `seq`, `prelander_id`, `payload`, plus `user_id` and `received_at` added by the Worker) has no field for it, so events cannot carry PII by construction. Arthur rejected the alternative, keeping the same `step_answered` event for step 3 and stripping the value in the Worker before the Queue, as a special case that breaks silently. The session is drafted as `docs/ai/examples/07-email-own-endpoint.md`.
+- The `users` row is created at completion. Entry (`GET /p/{prelander}`) writes nothing to D1 for a new user. A Lead return at entry creates a new click row and answers 302.
+- Q-29 was added to `docs/requirements/open-questions.md`: does a Lead from prelander P1 apply on P2 of the same domain (default yes). Q-1 keeps its default, an empty quiz on return, and the prefill trade-off is recorded there.
+- Table names in the data model differ from the wording in the ADRs: `conversions` (postbacks), `quarantine`, `catalog_history` (catalog versions), `users`, `user_answers`, `clicks`, `offers` with primary key `(version, id)`, and `partners`. `docs/design/data-model.md` carries the mapping.
+- `prelander_id` stays in the event body, trusted from the client. A signed visit token was considered and deferred.
+- The D1 size estimate in `nfr.md` will be revisited in stage 4, because only users who complete the quiz are stored.
+
+ADR 0003 is not superseded. The table and the upsert are the same. Only the moment of the write and the ordering key, which the ADR left to the data model, are fixed here. `docs/testing/acceptance-checks.md` was updated to the new flow (conventions table, shell helpers, the cards that used `/api/select` or per-step storage, and the email scan in DEMO-8 and R-12). No stage was added or moved.

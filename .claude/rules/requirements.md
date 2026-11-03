@@ -12,3 +12,4 @@ paths:
 - A term that means something specific in this project (Lead, click, visit, transition, universal offer, prelander) is defined in `glossary.md` the first time it is used in a document. Use the glossary term everywhere afterwards; do not introduce synonyms.
 - Numbers about load, latency, freshness, retention and cost go to `nfr.md` with their source (spec page or assumption id). Other documents refer to `nfr.md` instead of repeating the number.
 - Never settle an ambiguity in code or in the design text alone. It goes here first.
+- `open-questions.md` is written in Ukrainian because it is sent to the company as is; every other file under `docs/requirements/` stays in English. New rows are written in Ukrainian directly; IDs, status values, product terms (Lead, offer, prelander, click ...) and references stay as in the English files.

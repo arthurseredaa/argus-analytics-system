@@ -1,7 +1,7 @@
 {
   "$schema": "./progress.schema.json",
   "plan": "docs/plans/part1-design-document.md",
-  "updated": "2026-11-02",
+  "updated": "2026-11-03",
   "stages": [
     {
       "id": 0,
@@ -33,7 +33,10 @@
     {
       "id": 3,
       "title": "Data model and event catalog",
-      "status": "pending"
+      "status": "done",
+      "closed": "2026-11-03",
+      "verified": "docs/design/data-model.md: 8 CREATE TABLE statements, 9 PRIMARY KEY clauses (8 facts tables plus the MVP events table); R-3, R-4, R-10, Q-4, Q-23 and PB-5 each named in the idempotency table; every event type (prelander_viewed, step_viewed, step_answered, quiz_completed, offer_selected, offer_click, lead, purchase) appears in the trace section; grep for @ outside @example.com across docs/design, docs/testing, docs/ai and open-questions.md returns nothing. Explain-back: Arthur wrote the day 1 and day 2 flows himself (new user, Lead, return) and named the three-table query that finds the Lead.",
+      "notes": "Arthur designed the tables in Obsidian and the flows in text; the file was written from his drawing. His decisions: answers and email reach D1 in one POST /api/complete at quiz completion (ordering key: server receive time; per-step events are analytics only; a user who stops before the email step has no D1 rows); email through its own endpoint, never in events (the strip-in-Worker option was rejected as a special case); users row created at completion, no D1 write at entry; prelander_id trusted from the client, signed visit token deferred; table names conversions, quarantine, catalog_history; prefill between visits stays off (Q-1). Added Q-29 (Lead across prelanders of one domain). open-questions.md is now in Ukrainian for the company, with the rule recorded in CLAUDE.md and .claude/rules/requirements.md. acceptance-checks.md moved to /api/complete and one event per request. A-1 reworded (2 step answers plus quiz_completed; still 9 events). nfr.md D1 size estimate to be revisited in stage 4. AI example 07 drafted."
     },
     {
       "id": 4,

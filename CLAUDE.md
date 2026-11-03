@@ -5,7 +5,7 @@ Paid test assignment for Unicorn Pro (Senior Full-Stack Engineer, AI & Automatio
 ## Language
 
 - Talk to the user in Ukrainian.
-- Everything committed to the repo (docs, ADRs, README, code comments, commit messages) is in English.
+- Everything committed to the repo (docs, ADRs, README, code comments, commit messages) is in English. The one exception is `docs/requirements/open-questions.md`, which is in Ukrainian since it goes to the company unchanged.
 - Use the `humanizer` skill for every piece of prose that goes into the repo.
 
 ## Where things live

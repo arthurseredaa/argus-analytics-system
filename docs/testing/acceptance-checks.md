@@ -21,7 +21,7 @@ Run after every card. All four must pass. Commands are provisional until the pro
 pnpm typecheck
 pnpm lint            # oxlint, oxfmt --check
 pnpm test            # vitest with the Cloudflare Workers pool, unit and integration
-pnpm test:email-scan # R-12: runs the demo with a synthetic email, asserts it is absent from logs and URLs
+pnpm test:email-scan # R-12: runs the demo with a synthetic email, asserts it is absent from logs, URLs, Queue messages, R2 files and the events table
 ```
 
 ## Conventions
@@ -40,9 +40,9 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 
 | Purpose | Request | Fixed by |
 |---|---|---|
-| Prelander entry | `GET /p/{prelanderId}`. Sets the identity cookie, renders the quiz, or answers 302 for a lead return. | ADR 0002, ADR 0004 |
-| Event ingestion | `POST /api/events` with `{"events":[{"event_id","visit_id","seq","type","payload"}]}`. Answers 202. | ADR 0005 |
-| Offer selection | `POST /api/select` at quiz completion. Answers `{"offer_id","name","url","reason","catalog_version"}`. | ADR 0004 |
+| Prelander entry | `GET /p/{prelanderId}`. Sets the identity cookie, renders the quiz, or answers 302 for a lead return. Writes nothing to D1 for a new user. A lead return creates a new click row. | ADR 0002, ADR 0004 |
+| Event ingestion | `POST /api/events` with one event per request: `{"event_id","schema_version","type","client_time","visit_id","seq","prelander_id","payload"}`. The Worker adds `user_id` (from the cookie) and `received_at`. Answers 202. Analytics only: a step event never writes D1. The envelope has no field for an email. | ADR 0005, `docs/design/data-model.md` |
+| Quiz completion and offer selection | `POST /api/complete` with `{"answers":{"gender":"women","ethnicity":"asia"},"email":"u1@example.com"}`, sent once after the email step. Creates the `users` row and writes the answers and the encrypted email to D1. Answers `{"offer_id","name","url","reason","catalog_version"}`. Replaces `POST /api/select`. The latest accepted answer is the completion request the server received last. A user who stops before the email step has no rows in D1. | ADR 0004, `docs/design/data-model.md` |
 | Transition | `GET /go/{offerId}`. Re-checks offer status, stores the click, answers 302 with the click id in the `Location` query. | ADR 0004, ADR 0007 |
 | Postback | `POST /postback/v1/{partner}` with JSON `{"click_id","type","transaction_id","occurred_at","payout?","currency?"}` and headers `X-Timestamp`, `X-Signature` (HMAC-SHA256 over `timestamp.body`). | ADR 0007 |
 | Report | `GET /api/report?from=&to=&prelander=&offer=&view=cohort\|postback`, and the `/report` page. | stage 4 metrics |
@@ -55,9 +55,13 @@ Shell helpers used by the cards:
 ```sh
 state() { curl -s -b "$1" "$BASE/__test/state" | jq -S .; }
 snap()  { { state "$JAR"; curl -s "$BASE/api/report" | jq -S .; } > "$1"; }
-answer() { # answer <jar> <type> <value>
+answer() { # answer <jar> <type> <value> [seq]: one event per request, analytics only
   curl -s -b "$1" -c "$1" -X POST "$BASE/api/events" -H 'content-type: application/json' \
-    -d "{\"events\":[{\"event_id\":\"$(uuidgen)\",\"visit_id\":\"v1\",\"seq\":1,\"type\":\"$2\",\"payload\":{\"value\":\"$3\"}}]}"
+    -d "{\"event_id\":\"$(uuidgen)\",\"schema_version\":1,\"type\":\"$2\",\"client_time\":\"$(date -u +%FT%TZ)\",\"visit_id\":\"v1\",\"seq\":${4:-1},\"prelander_id\":\"demo\",\"payload\":{\"value\":\"$3\"}}"
+}
+complete() { # complete <jar> <gender> <ethnicity> <email>: the only call that writes answers and email to D1
+  curl -s -b "$1" -c "$1" -X POST "$BASE/api/complete" -H 'content-type: application/json' \
+    -d "{\"answers\":{\"gender\":\"$2\",\"ethnicity\":\"$3\"},\"email\":\"$4\"}"
 }
 ```
 
@@ -74,16 +78,18 @@ answer() { # answer <jar> <type> <value>
 
 ### QZ-1 Step 1 asks for the desired partner's gender
 
-Depends on: ADR 0005 (event shape).
+Depends on: ADR 0005 (event shape), ADR 0004 (completion).
 
-Automated: `pnpm test -- -t "QZ-1"`. Cases: `QZ-1 accepts women`, `QZ-1 accepts men`, `QZ-1 rejects other values and stores nothing`.
+Automated: `pnpm test -- -t "QZ-1"`. Cases: `QZ-1 accepts women`, `QZ-1 accepts men`, `QZ-1 rejects other values and stores nothing`, `QZ-1 step event alone writes nothing to D1`.
 
 Manual:
 1. Open `$BASE/p/demo` in a browser. Step 1 offers two answers, women and men, and the wording asks who the user is looking for, not the user's own gender.
 2. `answer $JAR quiz_step1 women`, then `state $JAR`.
 3. `answer $JAR quiz_step1 robots`, then `state $JAR`.
+4. `complete $JAR women asia user1@example.com`, then `state $JAR`.
+5. With a new jar, `complete $JAR2 robots asia user2@example.com`, then `state $JAR2`.
 
-Expected: step 2 answers 202 and the state shows the current step 1 answer `women`. Step 3 answers 400 and the state is unchanged.
+Expected: step 2 answers 202 and the state has no user row and no answers: a step event is analytics only. Step 3 answers 400. After step 4 the state shows the gender answer `women`; answers reach D1 only at completion. Step 5 answers 400 and the state stays empty.
 
 ### QZ-2 Step 2 asks for ethnicity, worded by the step 1 answer
 
@@ -93,9 +99,9 @@ Automated: `pnpm test -- -t "QZ-2"`. Cases: `QZ-2 wording after women`, `QZ-2 wo
 
 Manual:
 1. In a fresh browser profile, answer women at step 1 and read the step 2 question. Repeat with men.
-2. `answer $JAR quiz_step2 africa`.
+2. `answer $JAR quiz_step2 africa`, then `complete $JAR women africa user1@example.com`, then `state $JAR`.
 
-Expected: the two step 2 questions differ in wording and offer the same three values, stored as `asia`, `europe` and `latam`. The unknown value gets 400 and is not stored (offer-selection.md, "Unknown answer value").
+Expected: the two step 2 questions differ in wording and offer the same three values, stored at completion as `asia`, `europe` and `latam`. The unknown value gets 400 in both calls and is not stored (offer-selection.md, "Unknown answer value").
 
 ### QZ-3 Email does not affect the offer or create a Lead
 
@@ -104,36 +110,36 @@ Depends on: OFF-5, PB-1.
 Automated: `pnpm test -- -t "QZ-3"`. Cases: `QZ-3 same answers with different emails give the same offer`, `QZ-3 row 26 email creates no Lead`.
 
 Manual:
-1. Jar `user1.jar`: women, asia, email `user1@example.com`, then `POST /api/select`.
-2. Jar `user2.jar`: women, asia, email `user2@example.com`, then `POST /api/select`.
+1. Jar `user1.jar`: `complete $TMP/user1.jar women asia user1@example.com`.
+2. Jar `user2.jar`: `complete $TMP/user2.jar women asia user2@example.com`.
 3. `state` for both jars.
 
-Expected: both selections return 003 with reason `best_epu`. Neither user has a Lead.
+Expected: both responses return 003 with reason `best_epu`. The two users differ only in `email_hash`. Neither user has a Lead.
 
 ### QZ-4 Events link to transitions, and current answers are derived
 
 Depends on: ADR 0005, `docs/design/data-model.md` (event catalog).
 
-Automated: `pnpm test -- -t "QZ-4"`. Cases: `QZ-4 Q-4 latest accepted answer wins`, `QZ-4 R-10 interleaved answers from two tabs`, `QZ-4 offer_selected carries reason and catalog version`, `QZ-4 click links to its selection, user and offer`.
+Automated: `pnpm test -- -t "QZ-4"`. Cases: `QZ-4 Q-4 latest completion received wins`, `QZ-4 R-10 two tabs complete in turn`, `QZ-4 answer events do not change D1`, `QZ-4 offer_selected carries reason and catalog version`, `QZ-4 click links to its selection, user and offer`.
 
 Manual:
 1. `answer $JAR quiz_step1 women`, then `answer $JAR quiz_step1 men`.
-2. `state $JAR`: current step 1 answer and the list of answer events.
-3. Complete the quiz, `POST /api/select`, `GET /go/{offerId}`, then `state $JAR` again.
+2. `state $JAR`: the list of answer events, and no stored answers.
+3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET /go/{offerId}`, then `state $JAR` again.
 
-Expected: the current answer is `men` and both answer events are kept. The selection event has a reason code and a catalog version. The click row points to the same user and offer as the selection.
+Expected: after step 2 both answer events are kept and D1 has no answers, because answers are stored only at completion. After step 3 the current gender answer is `men`: the completion request the server received last wins, and an earlier `client_time` or `seq` does not change that. The selection event has a reason code and a catalog version. The click row points to the same user and offer as the selection.
 
 ### QZ-5 The current step is not stored separately
 
 Depends on: data model.
 
-Automated: `pnpm test -- -t "QZ-5"`. Case: `QZ-5 reload after step 1 resumes from stored answers`.
+Automated: `pnpm test -- -t "QZ-5"`. Cases: `QZ-5 reload before completion starts from step 1`, `QZ-5 entry after completion without a Lead shows an empty quiz (Q-1)`.
 
 Manual:
 1. `grep -rni "current_step" migrations/ src/` prints nothing.
-2. Answer step 1 in a browser, reload the page.
+2. Answer step 1 in a browser, reload the page. Then finish the quiz and open `$BASE/p/demo` again in the same browser.
 
-Expected: no stored step field. After the reload the page shows the next unanswered step, derived from the answers.
+Expected: no stored step field. Nothing is in D1 before completion (answers are written by `/api/complete`), so after the first reload the page starts at step 1. After completion, with no Lead, the entry shows an empty quiz (Q-1 default; prefilling from stored answers is the recorded trade-off).
 
 ### QZ-6 One quiz
 
@@ -151,7 +157,7 @@ Automated: `pnpm test:ui -- -g "QZ-7"` (browser test, tool to be chosen in the M
 
 Manual: open `$BASE/p/demo`, go through all three steps without a full page navigation, and watch the network tab.
 
-Expected: one page load, three steps, then the chosen offer's name and URL on screen.
+Expected: one page load, three steps, one `POST /api/complete` request after the email step, then the chosen offer's name and URL on screen.
 
 ### Identity
 
@@ -159,13 +165,14 @@ Expected: one page load, three steps, then the chosen offer's name and URL on sc
 
 Depends on: ADR 0002, ADR 0005.
 
-Automated: `pnpm test -- -t "ID-1"`. Cases: `ID-1 first visit creates a user id`, `ID-1 every stored event has a unique event id`, `ID-1 event without event id is rejected`.
+Automated: `pnpm test -- -t "ID-1"`. Cases: `ID-1 first visit sets a user id cookie and writes no D1 row`, `ID-1 complete creates the users row`, `ID-1 every stored event has a unique event id`, `ID-1 event without event id is rejected`.
 
 Manual:
 1. `curl -s -c $JAR -o /dev/null $BASE/p/demo`, then `state $JAR`.
 2. Send an event without `event_id`.
+3. `complete $JAR women asia user1@example.com`, then `state $JAR`.
 
-Expected: the state has a `user_id` and a properties object. The event without an id gets 400.
+Expected: after step 1 the state shows the cookie's `user_id` and no users row. The event without an id gets 400. After step 3 the users row exists with a properties object.
 
 ### ID-2 The same user is recognised on a return visit
 
@@ -178,7 +185,7 @@ Manual:
 2. Same request with a new jar.
 3. Read the `Set-Cookie` header from step 1.
 
-Expected: steps 1 give the same `user_id` in `state`, step 2 a different one. The cookie is `HttpOnly`, `Secure` (on staging) and `SameSite=Lax`, and holds a random id, not an email or a counter.
+Expected: steps 1 give the same cookie `user_id` in `state`, step 2 a different one (neither has a users row until completion). The cookie is `HttpOnly`, `Secure` (on staging) and `SameSite=Lax`, and holds a random id, not an email or a counter.
 
 ### ID-3 An email alone does not confirm identity
 
@@ -187,8 +194,8 @@ Depends on: ID-2, PB-4, OFF-3.
 Automated: `pnpm test -- -t "ID-3"`. Case: `ID-3 earlier user's email in a new browser gives no lead return`.
 
 Manual:
-1. User A (`a.jar`): women, asia, email `user1@example.com`, select (003), `GET /go/003`, then `pnpm postback lead --click <A's click id> --txn T-A1`.
-2. User B (`b.jar`, a new jar): `GET /p/demo`, then women, europe, email `user1@example.com`, select.
+1. User A (`a.jar`): `complete a.jar women asia user1@example.com` (003), `GET /go/003`, then `pnpm postback lead --click <A's click id> --txn T-A1`.
+2. User B (`b.jar`, a new jar): `GET /p/demo`, then `complete b.jar women europe user1@example.com`.
 
 Expected: B gets 004 with reason `best_epu`. B's entry answers 200 with the quiz, not 302 to 003. A and B have different user ids.
 
@@ -196,11 +203,11 @@ Expected: B gets 004 with reason `best_epu`. B's entry answers 200 with the quiz
 
 Depends on: ID-1, QZ-1 to QZ-3.
 
-Automated: `pnpm test -- -t "ID-4"`. Case: `ID-4 quiz run stores properties and the nine visit events`.
+Automated: `pnpm test -- -t "ID-4"`. Case: `ID-4 quiz run stores properties and the visit events`.
 
 Manual: run one full quiz to a transition, then `state $JAR`.
 
-Expected: properties show both answers and an email reference (not the email itself, per P-5). Nine events are stored for the visit: prelander view, `step_viewed` and an answer for each of steps 1, 2 and 3, offer selected, offer click (A-1).
+Expected: properties show both answers and an email reference (not the email itself, per P-5). The properties come from `/api/complete`; the events table holds the visit events: prelander view, `step_viewed` for each step, an answer event for steps 1 and 2, offer selected, offer click (A-1). The email step has no answer event, so the count of nine in A-1 is confirmed against the data model's catalog (NFR-1 uses the same number).
 
 ### Offer catalog and selection
 
@@ -220,7 +227,7 @@ Automated: `pnpm test -- -t "OFF-2"`. Case: `OFF-2 EPU change takes effect witho
 
 Manual:
 1. `grep -rnE "0\.(95|80|65|70|60|50)|1\.10" src/` prints nothing outside seed data.
-2. `pnpm offer set-epu 001 0.95`, then select for women + asia (decision table row 14).
+2. `pnpm offer set-epu 001 0.95`, then `complete` for women + asia (decision table row 14).
 3. Restore with `pnpm offer set-epu 001 0.80`.
 
 Expected: no EPU in code. Row 14 gives 001 on the EPU tie, with no deploy in between.
@@ -235,7 +242,7 @@ Manual:
 1. `POST /__test/seed` with a user who answered women + asia and has a Lead on 001. Put the cookie it returns into `$JAR`.
 2. `curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/p/demo`.
 
-Expected: `302` with a `Location` on `https://asia-women.example`, even though 003 has a higher EPU. Reason `lead_return` in the stored selection event.
+Expected: `302` with a `Location` on `https://asia-women.example`, even though 003 has a higher EPU. Reason `lead_return` in the stored selection event, and a new click row for the user.
 
 ### OFF-4 Several Leads
 
@@ -251,7 +258,7 @@ Expected: first entry goes to 004 (most recent Lead, the current default). After
 
 Automated: `pnpm test -- -t "OFF-5"`. Cases: decision table rows 1, 2, 3, 4, 6, 10, 11, 12, 14, 29.
 
-Manual: for each of women+asia, men+asia, women+europe, men+europe, men+latam run the quiz in a fresh jar and `POST /api/select`.
+Manual: for each of women+asia, men+asia, women+europe, men+europe, men+latam run `complete` in a fresh jar (for example `complete $JAR women asia user1@example.com`).
 
 Expected: 003, 003, 004, 005, 006, each with reason `best_epu`.
 
@@ -260,8 +267,8 @@ Expected: 003, 003, 004, 005, 006, each with reason `best_epu`.
 Automated: `pnpm test -- -t "OFF-6"`. Cases: decision table rows 5, 7, 8, 13, plus `OFF-6 incomplete offer row is excluded and reported`.
 
 Manual:
-1. Women + latam, select.
-2. `pnpm offer set-status 006 inactive`, men + latam, select. Restore 006.
+1. `complete` with women + latam.
+2. `pnpm offer set-status 006 inactive`, `complete` with men + latam. Restore 006.
 
 Expected: both give 007 with reason `fallback_universal`. An offer row without an ethnicity never matches and produces a configuration error in the logs.
 
@@ -269,7 +276,7 @@ Expected: both give 007 with reason `fallback_universal`. An offer row without a
 
 Automated: `pnpm test -- -t "OFF-7"`. Case: decision table row 15.
 
-Manual: `pnpm offer set-epu 007 5.00`, women + asia, select. Restore with `0.50`.
+Manual: `pnpm offer set-epu 007 5.00`, `complete` with women + asia. Restore with `0.50`.
 
 Expected: 003 with reason `best_epu`.
 
@@ -279,7 +286,7 @@ Automated: `pnpm test -- -t "OFF-8"`. Cases: decision table rows 9 and 21. UI ca
 
 Manual: `pnpm offer set-status 007 inactive`, women + latam in the browser. Restore 007.
 
-Expected: `POST /api/select` returns reason `no_offer` and no URL. The page shows «Немає доступного офера». `GET /go/007` does not answer 302.
+Expected: `POST /api/complete` returns reason `no_offer` and no URL. The page shows «Немає доступного офера». `GET /go/007` does not answer 302.
 
 ### OFF-9 A Lead for a disabled offer gives no redirect right
 
@@ -290,16 +297,16 @@ Automated: `pnpm test -- -t "OFF-9"`. Cases: decision table rows 18, 19, 20, 21,
 Manual:
 1. User with women + asia and a Lead on 001. `pnpm offer set-status 001 inactive`.
 2. Enter the prelander with curl as in OFF-3.
-3. Repeat with a user who answered only step 1.
+3. Repeat with a user who only sent step 1 events and never called `complete`.
 
-Expected: step 2 gives `302` to `https://asia-connect.example` with reason `best_epu` (row 18). Step 3 gives 200 with the quiz (row 19).
+Expected: step 2 gives `302` to `https://asia-connect.example` with reason `best_epu` (row 18). Step 3 gives 200 with the quiz (row 19): that user has no rows in D1, so the entry treats them as new.
 
 ### OFF-10 Selection runs on the server and the demo shows name and URL
 
-Automated: `pnpm test -- -t "OFF-10"`. Case: `OFF-10 select returns name and url of the chosen offer`.
+Automated: `pnpm test -- -t "OFF-10"`. Case: `OFF-10 complete returns name and url of the chosen offer`.
 
 Manual:
-1. `curl -s -b $JAR -X POST $BASE/api/select | jq`.
+1. `complete $JAR women asia user1@example.com | jq`.
 2. In the browser, finish the quiz and read the screen. Search the page's JavaScript for EPU values or the catalog.
 
 Expected: the response has `name` and `url` of one offer and nothing about the others. The page shows the same name and URL. The client code has no catalog and no selection logic.
@@ -311,8 +318,8 @@ Depends on: ADR 0004, R-9.
 Automated: `pnpm test -- -t "OFF-11"`. Cases: `OFF-11 transition answers 302 with Location and click id`, `OFF-11 R-9 offer disabled after selection triggers a new selection`.
 
 Manual:
-1. Women + asia, select, then `curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/go/003`.
-2. Select again, `pnpm offer set-status 003 inactive`, repeat the curl. Restore 003.
+1. `complete` with women + asia, then `curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/go/003`.
+2. `complete` again, `pnpm offer set-status 003 inactive`, repeat the curl. Restore 003.
 
 Expected: step 1 prints `302 https://asia-connect.example/?click_id=<random id>`. Step 2 prints a 302 to `https://asia-women.example` (001, the next best match). No request leaves for a `.example` host.
 
@@ -417,7 +424,7 @@ Depends on: `docs/design/metrics-and-operations.md`.
 
 Automated: `pnpm test -- -t "AN-1"`. Case: `AN-1 fixture gives expected start, steps, drop-offs, transitions, Leads, Purchases`.
 
-Manual: reset, run three users: one stops after step 1, one stops after step 3, one reaches a Lead and a Purchase. `curl -s "$BASE/api/report" | jq`.
+Manual: reset, run three users (funnel counts come from events, so a user who stops before the email step still counts at the steps reached): one stops after step 1, one stops after step 3, one reaches a Lead and a Purchase. `curl -s "$BASE/api/report" | jq`.
 
 Expected: started 3, step 1 3, step 2 2, step 3 2, transitions 1, Lead 1, Purchase 1. Drop-off after step 1 is 1 and after step 3 is 1.
 
@@ -529,10 +536,9 @@ JAR=$TMP/demo.jar
 
 # DEMO-2: new user, quiz, offer
 curl -s -c $JAR -b $JAR -o /dev/null -w '%{http_code}\n' $BASE/p/demo    # 200, quiz
-answer $JAR quiz_step1 women
+answer $JAR quiz_step1 women                                             # analytics only, nothing in D1
 answer $JAR quiz_step2 asia
-answer $JAR quiz_step3 user1@example.com                                 # sent in the body only
-curl -s -b $JAR -X POST $BASE/api/select | jq -c '{offer_id,reason}'     # {"offer_id":"003","reason":"best_epu"}
+complete $JAR women asia user1@example.com | jq -c '{offer_id,reason}'   # {"offer_id":"003","reason":"best_epu"}; email only in this body
 CLICK=$(curl -s -b $JAR -o /dev/null -w '%{redirect_url}' $BASE/go/003 | sed 's/.*click_id=//')
 
 # DEMO-3: Lead for that click
@@ -604,15 +610,16 @@ Expected: every README row exists in the decision table with the same result.
 
 Depends on: P-5, P-11, R-12.
 
-Automated: `pnpm test:email-scan`. Cases: `DEMO-8 R-12 email absent from captured logs`, `DEMO-8 R-12 email absent from every request URL and Location header`, `DEMO-8 email is stored encrypted`.
+Automated: `pnpm test:email-scan`. Cases: `DEMO-8 R-12 email absent from captured logs`, `DEMO-8 R-12 email absent from every request URL and Location header`, `DEMO-8 R-12 email absent from Queue messages, R2 files and the events table`, `DEMO-8 email is stored encrypted`.
 
 Manual:
 1. `wrangler tail --format json > $TMP/tail.log` against staging in one terminal.
 2. Run the demo script.
 3. `grep -c "user1@example.com" $TMP/tail.log` and `grep -c "user1%40example.com" $TMP/tail.log`.
 4. `grep -rnE "[A-Za-z0-9._%+-]+@" tests/ fixtures/ | grep -v "@example.com"`.
+5. After the demo, fetch the R2 files it wrote (bucket from ADR 0006) and dump the events table (`wrangler d1 execute <db> --command "SELECT * FROM events"`). In the test run, read the messages captured from the Queue. `grep -c` each for `user1@example.com` and `user1%40example.com`.
 
-Expected: 0 and 0 in step 3. Step 4 prints nothing. `state` shows an email hash or ciphertext, never the address.
+Expected: 0 and 0 in step 3. Step 4 prints nothing. Step 5 prints 0 for the Queue messages, the R2 files and the events table: the envelope has no email field, so the address exists only in the `/api/complete` body and in `users.email_enc` and `users.email_hash`. `state` shows an email hash or ciphertext, never the address.
 
 ### DEMO-9 No real transitions to partners
 
@@ -644,9 +651,9 @@ Expected: all pass, and rows 16 to 23, 27 and 28 each have a test.
 
 ### TEST-3 Redelivered events and postbacks count once, two purchases count twice
 
-Automated: `pnpm test -- -t "PB-5|TEST-3"`. Extra case owned by this card: `TEST-3 R-3 resending the same event batch stores each event once`.
+Automated: `pnpm test -- -t "PB-5|TEST-3"`. Extra case owned by this card: `TEST-3 R-3 resending the same event stores it once`.
 
-Manual: send the same `POST /api/events` body twice and compare the event count in `state`.
+Manual: send the same `POST /api/events` body (one event) twice and compare the event count in `state`.
 
 Expected: the count rises once.
 
@@ -723,7 +730,7 @@ Expected: in both runs the event is counted within the freshness figure in nfr.m
 
 Depends on: ADRs 0005 and 0006, P-8.
 
-Automated: `pnpm test -- -t "NFR-4"`. Case: `NFR-4 P-8 sink outage leaves entry, select, transition and postback working`.
+Automated: `pnpm test -- -t "NFR-4"`. Case: `NFR-4 P-8 sink outage leaves entry, complete, transition and postback working`.
 
 Manual:
 1. `pnpm sink outage on`.
@@ -754,7 +761,7 @@ Depends on: metrics document (p95 targets, set in stage 4 per nfr.md), R-18.
 Automated: none, a measurement.
 
 Manual:
-1. `k6 run -e BASE=$BASE --summary-export $TMP/steady.json load/steady.js` at the average rate, covering `GET /p/demo`, `POST /api/select`, `GET /go/{offerId}` and `POST /api/events`.
+1. `k6 run -e BASE=$BASE --summary-export $TMP/steady.json load/steady.js` at the average rate, covering `GET /p/demo`, `POST /api/complete`, `GET /go/{offerId}` and `POST /api/events`.
 2. Read p95 per endpoint from `steady.json`, and from the Workers analytics in the Cloudflare dashboard for the same window.
 3. Read the p95 values from the `load/peak.js` run in NFR-2.
 4. Note where k6 ran from. If the design names more than one region (NFR-7), run step 1 from each.
@@ -777,14 +784,14 @@ Expected: Q-2 is answered or its default is stated in the design. The store sits
 
 Depends on: ADRs 0005 and 0007, Q-11, Q-12.
 
-Automated: `pnpm test -- -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. Extra case owned by this card: `NFR-8 R-3 events arriving out of order keep the latest answer by sequence`.
+Automated: `pnpm test -- -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. Extra case owned by this card: `NFR-8 R-3 events arriving out of order are all stored and leave D1 unchanged`, `NFR-8 R-3 the completion received last decides the stored answers`.
 
 Manual:
 1. Run the AN-5, NFR-4 and NFR-5 manual steps.
-2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit, then `state $JAR`.
+2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit (`answer $JAR quiz_step1 women 2`, then `answer $JAR quiz_step1 men 1`), then `state $JAR`. Then send two `complete` calls in turn and `state $JAR` again.
 3. Check that the README section on known limitations lists these tests by name as the evidence.
 
-Expected: all listed tests pass. In step 2 the answer from `seq` 2 is current. The README shows how each behaviour was verified.
+Expected: all listed tests pass. In step 2 both events are stored, ordered by `seq`, and D1 holds no answers until `complete`; after the two calls the one received last is current (seq orders events, not answers). The README shows how each behaviour was verified.
 
 ### A-4 Rule facts are visible to selection within seconds
 
@@ -794,7 +801,7 @@ Automated: `pnpm test -- -t "A-4"`. Cases: `A-4 Lead is used by the very next en
 
 Manual:
 1. Run the demo to the Lead. Right after the postback returns, send the DEMO-4 request.
-2. `pnpm offer set-status 003 inactive`, then for a women + asia user call `POST /api/select` every 5 seconds until the result changes. Note the time. Restore 003.
+2. `pnpm offer set-status 003 inactive`, then for a women + asia user call `complete` every 5 seconds until the result changes. Note the time. Restore 003.
 
 Expected: step 1 gives the 302 on the first try. In step 2 the change takes effect within the Q-9 default.
 
@@ -802,15 +809,15 @@ Expected: step 1 gives the 302 on the first try. In step 2 the change takes effe
 
 Depends on: DEMO-8, P-5.
 
-Automated: `pnpm test -- -t "R-12"`. Cases: `R-12 malformed event with an email is rejected without logging the email`, `R-12 exception path redacts the request body`, `R-12 test endpoints answer 404 in production`.
+Automated: `pnpm test -- -t "R-12"`. Cases: `R-12 malformed completion body with an email is rejected without logging the email`, `R-12 exception path redacts the request body`, `R-12 envelope has no email field: an event carrying one never reaches the Queue`, `R-12 test endpoints answer 404 in production`.
 
 Manual:
 1. Run the DEMO-8 manual steps.
-2. With `wrangler tail` running, send a step 3 event with invalid JSON around `user2@example.com`, then a body that makes the handler throw.
-3. `grep -c "user2@example.com" $TMP/tail.log`.
+2. With `wrangler tail` running, send a `POST /api/complete` with invalid JSON around `user2@example.com`, then a body that makes the handler throw. Then send one valid `complete` for `user2@example.com`, and one `POST /api/events` event with an extra `email` field holding the same address.
+3. `grep -c "user2@example.com" $TMP/tail.log`. Scan the Queue messages, R2 files and events table as in DEMO-8 step 5.
 4. `curl -s -o /dev/null -w '%{http_code}\n' <production url>/__test/state`.
 
-Expected: step 3 prints 0. Step 4 prints 404.
+Expected: step 3 prints 0 for the log and 0 for the Queue, R2 and events scan. Step 4 prints 404.
 
 ### R-14 Abusive clients are limited
 
