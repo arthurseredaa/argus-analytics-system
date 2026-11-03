@@ -26,7 +26,7 @@
       "title": "Architecture decisions, events, postbacks, BigQuery",
       "status": "done",
       "closed": "2026-11-02",
-      "verified": "ADR 0005 buffer table gives events and hours at 6.9 and 200 events/s for every failure; ADR 0007 names the dedup key (partner_id, type, transaction_id) and the HTTP answer for malformed (400), unsigned or wrong signature (401), stale (401) and unknown-click (202, quarantine) postbacks; each ADR links its requirement ids; Arthur's hand-drawn diagram (docs/ai/examples/06-diagram.png) matches ADRs 0005 to 0007 after three rounds of corrections.",
+      "verified": "ADR 0005 buffer table gives events and hours at 6.9 and 200 events/s for every failure; ADR 0007 names the dedup key (partner_id, type, transaction_id) and the HTTP answer for malformed (400), unsigned or wrong signature (401), stale (401) and unknown-click (202, quarantine) postbacks; each ADR links its requirement ids; Arthur's hand-drawn diagram (now docs/design/architecture.png) matches ADRs 0005 to 0007 after three rounds of corrections.",
       "notes": "The explain-back was a diagram instead of spoken walk-throughs. It found gaps that were fixed in this commit: dead letter queue behaviour and redrive (ADR 0005), rejected/ retention and a 5-attempt limit on load jobs (ADR 0006), the loader's 9,000-file cap. Arthur decided one event per request, so the design cost is the unbatched column in nfr.md ($28.60 a month at 18M). The postback redelivery and second-purchase cases were settled while writing ADR 0007, not drawn. The ADRs were first committed in 0a66b3f; this closing commit adds the fixes.",
       "commit": "0a66b3f"
     },
@@ -49,7 +49,10 @@
     {
       "id": 5,
       "title": "The design document and the diagram",
-      "status": "pending"
+      "status": "done",
+      "closed": "2026-11-03",
+      "verified": "docs/design/design.md: 2,491 words excluding table lines (limit 2,500); 11 '## ' sections in the DES-2 order; all six ADRs 0002 to 0007 linked; no @ outside @example.com; 0 em or en dashes; every relative link resolves except ../plans/part2-mvp-stages.md, which stage 6 creates. request-flow.md: Mermaid sequence diagram, 0 semicolons in message text, renders in the IDE preview (screenshot). architecture.png is Arthur's drawing with the four stage 5 additions. GitHub rendering of the Mermaid block checked after push.",
+      "notes": "Diagram decision: Arthur's hand-drawn PNG stays the architecture diagram (components and failure notes), because a Mermaid flowchart of the same content was unreadable to him; requests are a separate Mermaid sequence diagram in request-flow.md. The old docs/ai/examples/06-diagram.png was deleted and example 06 now points to docs/design/architecture.png. design.md drafted by an Opus subagent; Fable fixed the report endpoint name, the plan file name, removed an invented email-shaped-string filter and a UserID log test, aligned the postback signature header in acceptance-checks.md with ADR 0007. Explain-back: Arthur's walk-through matched the design except four points that were his own stage 3 decision (no D1 write at entry, answers and email in one /api/complete, rule 3 at entry for a Lead on a disabled offer, cohort keyed by click date); accepted. No cover message: everything is delivered with the MVP."
     },
     {
       "id": 6,

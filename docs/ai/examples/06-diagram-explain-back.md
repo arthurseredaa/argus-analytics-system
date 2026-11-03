@@ -74,5 +74,5 @@ The diagram caught a contradiction the ADR review had missed, and Arthur's quest
 - Retry delays up to 24 hours, the dead letter queue behaviour, the pull consumer's `v8` limitation, R2 deletes of up to 1,000 keys per call and the 10,000 subrequests per invocation were checked on the Cloudflare docs on 2026-11-02; the links are in the References of ADRs 0005 and 0006.
 - The retry schedule adds up to 303 minutes (1 + 2 + 4 + 8 + 16 + 32 + 4 × 60), the figure in `nfr.md`.
 - The tests named in the ADRs (`consumer write failure is retried with growing delays and goes to the dead letter queue after 10 retries`, `load job failing five times moves the batch to rejected`, `BigQuery unavailable does not count as a load attempt`, `a run takes at most 9,000 files`) are written with the implementation in Part 2.
-- The diagram itself: `docs/ai/examples/06-diagram.png` (third revision, after the fixes above).
+- The diagram itself: `docs/design/architecture.png`. The third revision, after the fixes above, became the design's architecture diagram in stage 5 (2026-11-03) with a Report block, the list of D1 tables, the BigQuery view and the duplicate retry notes removed.
 - Commit: the stage 2 closing commit.
