@@ -8,7 +8,9 @@ CREATE TABLE events (
   type           TEXT NOT NULL,
   client_time    INTEGER,
   received_at    INTEGER NOT NULL,
-  user_id        TEXT NOT NULL,
+  -- null for lead and purchase whose click lost its user (deletion or the 90-day
+  -- cleanup sets clicks.user_id to null)
+  user_id        TEXT,
   visit_id       TEXT NOT NULL,
   seq            INTEGER,
   prelander_id   TEXT NOT NULL,

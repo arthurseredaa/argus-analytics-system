@@ -44,7 +44,7 @@
     { "binding": "EVENTS_BUCKET", "bucket_name": "funnels-events" },
   ],
   "analytics_engine_datasets": [
-    // Design: metrics and reliability numbers.
+    // docs/design/metrics-and-operations.md: metrics and reliability numbers.
     { "binding": "METRICS", "dataset": "funnels_metrics" },
   ],
 }

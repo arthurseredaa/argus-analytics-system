@@ -28,6 +28,19 @@ it("MVP-2 events database has only the events table", async () => {
   expect(await tableNames(env.EVENTS)).toEqual(["events"]);
 });
 
+it("MVP-2 events accepts a lead whose click lost its user", async () => {
+  await env.EVENTS.prepare(
+    `INSERT INTO events (event_id, schema_version, type, client_time, received_at, user_id, visit_id, seq, prelander_id, payload)
+     VALUES ('evt-lead-1', 1, 'lead', NULL, 1700000000000, NULL, 'visit-1', NULL, 'pre-1', '{}')`,
+  ).run();
+  const row = await env.EVENTS.prepare(
+    "SELECT user_id FROM events WHERE event_id = 'evt-lead-1'",
+  ).first<{
+    user_id: string | null;
+  }>();
+  expect(row?.user_id).toBeNull();
+});
+
 it("MVP-2 the worker has every binding the design names", () => {
   for (const name of ["FACTS", "EVENTS", "EVENTS_QUEUE", "EVENTS_BUCKET", "METRICS"]) {
     expect(env[name as keyof Env], name).toBeDefined();
