@@ -3,7 +3,7 @@
 -- null for server events.
 
 CREATE TABLE events (
-  event_id       TEXT PRIMARY KEY,
+  event_id       TEXT NOT NULL PRIMARY KEY,
   schema_version INTEGER NOT NULL,
   type           TEXT NOT NULL,
   client_time    INTEGER,

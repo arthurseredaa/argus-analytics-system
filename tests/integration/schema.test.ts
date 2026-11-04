@@ -41,6 +41,15 @@ it("MVP-2 events accepts a lead whose click lost its user", async () => {
   expect(row?.user_id).toBeNull();
 });
 
+it("MVP-2 events rejects an event without event_id", async () => {
+  await expect(
+    env.EVENTS.prepare(
+      `INSERT INTO events (event_id, schema_version, type, client_time, received_at, user_id, visit_id, seq, prelander_id, payload)
+       VALUES (NULL, 1, 'lead', NULL, 1700000000000, NULL, 'visit-1', NULL, 'pre-1', '{}')`,
+    ).run(),
+  ).rejects.toThrow(/NOT NULL constraint failed: events.event_id/);
+});
+
 it("MVP-2 the worker has every binding the design names", () => {
   for (const name of ["FACTS", "EVENTS", "EVENTS_QUEUE", "EVENTS_BUCKET", "METRICS"]) {
     expect(env[name as keyof Env], name).toBeDefined();
