@@ -14,6 +14,21 @@ export function cookieFrom(res: Response): string {
   return header.split(";")[0] ?? "";
 }
 
+export async function getPath(
+  path: string,
+  cookie?: string,
+  app?: Hono<AppEnv>,
+  envOverride?: Partial<Env>,
+  method = "GET",
+): Promise<Response> {
+  const headers = new Headers();
+  if (cookie !== undefined) headers.set("cookie", cookie);
+  const init = { method, headers };
+  if (app === undefined) return SELF.fetch(`https://example.com${path}`, init);
+  const req = new Request(`https://example.com${path}`, init);
+  return app.fetch(req, { ...env, ...envOverride }, createExecutionContext());
+}
+
 export async function postComplete(
   body: unknown,
   cookie?: string,

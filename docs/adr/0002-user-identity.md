@@ -35,7 +35,7 @@ Ad click IDs (`gclid`, `fbclid`, `ttclid`) and UTM tags in the landing URL were 
 
 ## Decision
 
-Option 1. It is the only option that gives the server the UserID on the first request of a visit, which the redirect before render needs, and `HttpOnly` keeps the ID out of reach of scripts on the page.
+Option 1. It is the only option that gives the server the UserID on the first request of a visit, which the redirect before render needs, and `HttpOnly` keeps the ID out of reach of scripts on the page. On `workers.dev`, a public suffix, the cookie is host-only with no `Domain`; the registrable-domain cookie applies once prelanders run on our own domain.
 
 Details that belong to this decision:
 

@@ -97,4 +97,4 @@ All offers active unless the "Catalog change" column says otherwise. "Lead" list
 | 28 | women + asia | 001 | 001 removed | 003, quiz skipped | best_epu | spec rule 3 |
 | 29 | women + europe | none | 004 disabled | 005 | best_epu | derived |
 
-Rows 1, 3, 5, 6, 7, 8 and 16 are the spec's own worked examples (OFF-12). The UI text for `no_offer` is «Немає доступного офера», exactly as in the spec; tests assert the reason code, not the text.
+Rows 1, 3, 5, 6, 7, 8 and 16 are the spec's own worked examples (OFF-12). The UI text for `no_offer` is `No offer available`, the English rendering of the spec's «Немає доступного офера» (the quiz page is in English, decision 2 of the stage 1 plan). Selection tests assert the reason code, not the text; one page test asserts the text.

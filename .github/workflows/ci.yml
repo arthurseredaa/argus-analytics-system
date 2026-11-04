@@ -54,7 +54,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - run: pnpm exec wrangler deploy --var GIT_SHA:${{ github.sha }}
+      # This is the demo deployment: the test routes are on (R-12, decision 1). A production
+      # deploy leaves --var TEST_ROUTES:on out and the routes answer 404.
+      - run: pnpm exec wrangler deploy --var GIT_SHA:${{ github.sha }} --var TEST_ROUTES:on
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
