@@ -10,4 +10,41 @@
     "traces": { "enabled": true, "head_sampling_rate": 0.1 },
   },
   "vars": { "GIT_SHA": "dev" },
+  "d1_databases": [
+    {
+      // ADR 0003: facts in D1.
+      "binding": "FACTS",
+      "database_name": "facts",
+      "database_id": "FACTS_DATABASE_ID",
+      "migrations_dir": "migrations/facts",
+    },
+    {
+      // ADR 0005: MVP stand-in for BigQuery.
+      "binding": "EVENTS",
+      "database_name": "events",
+      "database_id": "EVENTS_DATABASE_ID",
+      "migrations_dir": "migrations/events",
+    },
+  ],
+  "queues": {
+    // ADR 0005: event ingestion queue.
+    "producers": [{ "binding": "EVENTS_QUEUE", "queue": "events" }],
+    "consumers": [
+      {
+        "queue": "events",
+        "max_batch_size": 100,
+        "max_batch_timeout": 30,
+        "max_retries": 10,
+        "dead_letter_queue": "events-dlq",
+      },
+    ],
+  },
+  "r2_buckets": [
+    // ADR 0005: raw event archive.
+    { "binding": "EVENTS_BUCKET", "bucket_name": "funnels-events" },
+  ],
+  "analytics_engine_datasets": [
+    // Design: metrics and reliability numbers.
+    { "binding": "METRICS", "dataset": "funnels_metrics" },
+  ],
 }
