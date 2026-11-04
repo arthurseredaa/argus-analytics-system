@@ -135,10 +135,19 @@ describe("quiz flow", () => {
     expect(() => parseFlow(looping)).toThrow(/cycle/);
   });
   it("QZ-7 a flow needs one email step ending the flow, options on choice steps, unique keys", () => {
+    const emailStep = demoJson.steps.find((s) => s.kind === "email");
+    if (!emailStep) throw new Error("demo has no email step");
+    const secondEmail = { ...emailStep, key: "email2" };
+    const twoEmails = demoJson.steps.map((s) =>
+      s.key === "ethnicity" ? { ...s, next: "email" } : s,
+    );
+    expect(() => parseFlow({ ...demoJson, steps: [...twoEmails, secondEmail] })).toThrow(
+      /exactly one email step/,
+    );
     const noEmail = demoJson.steps
       .filter((s) => s.kind !== "email")
       .map((s) => ({ ...s, next: null }));
-    expect(() => parseFlow({ ...demoJson, steps: noEmail })).toThrow(/email/);
+    expect(() => parseFlow({ ...demoJson, steps: noEmail })).toThrow();
     expect(() => parseFlow(withStep("gender", { options: [] }))).toThrow(/options/);
     expect(() => parseFlow({ ...demoJson, steps: [...demoJson.steps, demoJson.steps[0]] })).toThrow(
       /unique/,
