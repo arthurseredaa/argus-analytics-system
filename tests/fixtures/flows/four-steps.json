@@ -1,0 +1,39 @@
+{
+  "prelander": "four",
+  "first": "gender",
+  "steps": [
+    {
+      "key": "gender",
+      "kind": "choice",
+      "wording": "Who would you like to meet?",
+      "options": [
+        { "value": "women", "label": "Women" },
+        { "value": "men", "label": "Men" }
+      ],
+      "next": "ethnicity"
+    },
+    {
+      "key": "ethnicity",
+      "kind": "choice",
+      "wording": "Where should the {gender} you meet come from?",
+      "options": [
+        { "value": "asia", "label": "Asia" },
+        { "value": "europe", "label": "Europe" },
+        { "value": "latam", "label": "Latin America" }
+      ],
+      "next": "age"
+    },
+    {
+      "key": "age",
+      "kind": "choice",
+      "wording": "How old should they be?",
+      "options": [
+        { "value": "18-29", "label": "18-29" },
+        { "value": "30-44", "label": "30-44" },
+        { "value": "45+", "label": "45+" }
+      ],
+      "next": "email"
+    },
+    { "key": "email", "kind": "email", "wording": "Your email address", "next": null }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "prelander": "demo",
+  "first": "gender",
+  "steps": [
+    {
+      "key": "gender",
+      "kind": "choice",
+      "wording": "Who would you like to meet?",
+      "options": [
+        { "value": "women", "label": "Women" },
+        { "value": "men", "label": "Men" }
+      ],
+      "next": "ethnicity"
+    },
+    {
+      "key": "ethnicity",
+      "kind": "choice",
+      "wording": "Where should the {gender} you meet come from?",
+      "options": [
+        { "value": "asia", "label": "Asia" },
+        { "value": "europe", "label": "Europe" },
+        { "value": "latam", "label": "Latin America" }
+      ],
+      "next": "email"
+    },
+    { "key": "email", "kind": "email", "wording": "Your email address", "next": null }
+  ]
+}
