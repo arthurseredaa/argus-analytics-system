@@ -40,7 +40,7 @@ export function select(facts: Facts, catalog: Catalog, moment: Moment): Selectio
       const offer = activeById.get(l.offerId);
       return offer === undefined ? [] : [{ offer, acceptedAt: l.acceptedAt }];
     })
-    .sort(
+    .toSorted(
       (a, b) => b.acceptedAt - a.acceptedAt || b.offer.epu - a.offer.epu || byId(a.offer, b.offer),
     );
   const lead = leads[0];
@@ -60,11 +60,11 @@ export function select(facts: Facts, catalog: Catalog, moment: Moment): Selectio
     .filter(
       (o) => o.kind === "specialised" && o.ethnicity === ethnicity && o.genders.includes(gender),
     )
-    .sort((a, b) => b.epu - a.epu || byId(a, b))[0];
+    .toSorted((a, b) => b.epu - a.epu || byId(a, b))[0];
   if (best !== undefined) return done("redirect", best.id, "best_epu");
 
   // Step 6: the universal offer, if active (the lowest id if Q-7 ever allows several).
-  const universal = active.filter((o) => o.kind === "universal").sort(byId)[0];
+  const universal = active.filter((o) => o.kind === "universal").toSorted(byId)[0];
   if (universal !== undefined) return done("redirect", universal.id, "fallback_universal");
 
   // Step 7.

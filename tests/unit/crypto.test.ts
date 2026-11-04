@@ -30,7 +30,7 @@ describe("crypto", () => {
     const k1 = await importAesKey(KEY_A, "MASTER_KEY");
     const k2 = await importAesKey(KEY_B, "MASTER_KEY");
     const token = await encrypt(k1, "user1@example.com");
-    await expect(decrypt(k2, token)).rejects.toThrow();
+    await expect(decrypt(k2, token)).rejects.toMatchObject({ name: "OperationError" });
   });
 
   it("DEMO-8 P-5 email hash ignores case and surrounding spaces", async () => {

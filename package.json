@@ -9,7 +9,7 @@
     "seed": "node scripts/seed.ts",
     "types": "wrangler types --strict-vars=false --env-file /dev/null",
     "typecheck": "wrangler types --strict-vars=false --env-file /dev/null && tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
-    "lint": "oxlint src tests scripts",
+    "lint": "oxlint --deny-warnings src tests scripts",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",

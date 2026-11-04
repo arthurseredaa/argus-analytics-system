@@ -147,7 +147,9 @@ describe("quiz flow", () => {
     const noEmail = demoJson.steps
       .filter((s) => s.kind !== "email")
       .map((s) => ({ ...s, next: null }));
-    expect(() => parseFlow({ ...demoJson, steps: noEmail })).toThrow();
+    expect(() => parseFlow({ ...demoJson, steps: noEmail })).toThrow(
+      /steps\[0\]\.next: a choice step must lead on to the email step/,
+    );
     expect(() => parseFlow(withStep("gender", { options: [] }))).toThrow(/options/);
     expect(() => parseFlow({ ...demoJson, steps: [...demoJson.steps, demoJson.steps[0]] })).toThrow(
       /unique/,

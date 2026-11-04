@@ -7,6 +7,11 @@ import fourSteps from "../fixtures/flows/four-steps.json";
 import { cookieFrom, getPath, newCookie, postComplete } from "../fixtures/http.ts";
 
 const idOf = (cookie: string) => cookie.slice(4);
+const body = (answers: Record<string, string>) => ({
+  prelander_id: "four",
+  answers,
+  email: "user3@example.com",
+});
 const userRow = (cookie: string) =>
   env.FACTS.prepare("SELECT id FROM users WHERE id = ?").bind(idOf(cookie)).first();
 
@@ -126,11 +131,6 @@ describe("GET /p/:prelander", () => {
     for (const v of ["18-29", "30-44", "45+"]) expect(age).toContain(`data-value="${v}"`);
 
     const cookie = newCookie();
-    const body = (answers: Record<string, string>) => ({
-      prelander_id: "four",
-      answers,
-      email: "user3@example.com",
-    });
     const ok = await postComplete(
       body({ gender: "women", ethnicity: "asia", age: "30-44" }),
       cookie,

@@ -62,6 +62,10 @@ function targets(next: Next): string[] {
   return out;
 }
 
+function fail(path: string, message: string): never {
+  throw new Error(`invalid flow at ${path}: ${message}`);
+}
+
 export function parseFlow(json: unknown): Flow {
   const parsed = flowSchema.safeParse(json);
   if (!parsed.success) {
@@ -70,9 +74,6 @@ export function parseFlow(json: unknown): Flow {
     throw new Error(`invalid flow at ${path}: ${issue?.message ?? "invalid"}`);
   }
   const flow = parsed.data as Flow;
-  const fail = (path: string, message: string): never => {
-    throw new Error(`invalid flow at ${path}: ${message}`);
-  };
 
   const keys = new Set<string>();
   flow.steps.forEach((step, i) => {

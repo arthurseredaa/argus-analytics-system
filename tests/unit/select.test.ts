@@ -55,8 +55,7 @@ describe("decision table", () => {
     const target = row.expected.action === "redirect" ? row.expected.offerId! : row.expected.action;
     for (const moment of row.moments) {
       const suffix = row.bothMoments ? ` at ${moment}` : "";
-      const name = `${CARDS[row.n]!.join(" ")} row ${row.n} ${row.answersLabel} gives ${target}${suffix}`;
-      it(name, () => {
+      it(`${CARDS[row.n]!.join(" ")} row ${row.n} ${row.answersLabel} gives ${target}${suffix}`, () => {
         const facts = { answers: row.answers, leads: row.leads, purchases: [] };
         const result = select(facts, applyChanges(catalogV1(), row.change), moment);
         expect(result).toEqual({ ...row.expected, reason: row.reason, catalogVersion: 1 });

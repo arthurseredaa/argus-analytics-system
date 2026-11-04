@@ -57,7 +57,7 @@ describe("POST /api/complete", () => {
       name: "Europe Connect",
       url: "https://europe-connect.example",
     });
-    expect(Object.keys(json).sort()).toEqual([
+    expect(Object.keys(json).toSorted()).toEqual([
       "catalog_version",
       "name",
       "offer_id",
