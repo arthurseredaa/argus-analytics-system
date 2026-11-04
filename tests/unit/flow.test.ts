@@ -129,7 +129,10 @@ describe("quiz flow", () => {
     expect(() => parseFlow(withStep("gender", { next: "nowhere" }))).toThrow(/steps\[0\]\.next/);
   });
   it("QZ-7 a flow with a cycle is rejected", () => {
-    expect(() => parseFlow(withStep("ethnicity", { next: "gender" }))).toThrow(/cycle/);
+    const looping = withStep("ethnicity", {
+      next: { branches: [{ when: { if: "asia" }, goto: "gender" }], otherwise: "email" },
+    });
+    expect(() => parseFlow(looping)).toThrow(/cycle/);
   });
   it("QZ-7 a flow needs one email step ending the flow, options on choice steps, unique keys", () => {
     const noEmail = demoJson.steps
@@ -140,6 +143,20 @@ describe("quiz flow", () => {
     expect(() => parseFlow({ ...demoJson, steps: [...demoJson.steps, demoJson.steps[0]] })).toThrow(
       /unique/,
     );
+  });
+
+  it("QZ-7 a flow whose choice step ends without the email step is rejected", () => {
+    expect(() => parseFlow(withStep("ethnicity", { next: null }))).toThrow(/steps\[1\]\.next/);
+    expect(() =>
+      parseFlow(
+        withStep("gender", {
+          next: { branches: [{ when: { if: "men" }, goto: "email" }], otherwise: null },
+        }),
+      ),
+    ).toThrow(/steps\[0\]\.next/);
+  });
+  it("QZ-7 a flow whose email step is unreachable is rejected", () => {
+    expect(() => parseFlow(withStep("ethnicity", { next: "gender" }))).toThrow(/unreachable/);
   });
 
   it("QZ-7 prelanderFlows holds the demo flow", () => {

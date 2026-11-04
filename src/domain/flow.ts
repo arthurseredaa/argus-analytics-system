@@ -1,5 +1,5 @@
 // Domain: the quiz flow as data, with its parser and pure walking functions.
-// Implements the quiz-flow-as-data decision of ADR 0005; serves QZ-1, QZ-2, QZ-7.
+// Implements the "Quiz flow" decision of docs/plans/part2-mvp-stages.md (no ADR: reversible); serves QZ-1, QZ-2, QZ-7.
 import { z } from "zod";
 
 export type Condition = { if: string } | { some: readonly Condition[] } | { not: Condition };
@@ -86,6 +86,11 @@ export function parseFlow(json: unknown): Flow {
     if (step.kind === "choice" && (step.options?.length ?? 0) === 0) {
       fail(`steps[${i}].options`, "a choice step needs at least one option");
     }
+    const ends =
+      step.next === null || (typeof step.next === "object" && step.next.otherwise === null);
+    if (step.kind === "choice" && ends) {
+      fail(`steps[${i}].next`, "a choice step must lead on to the email step, not end the flow");
+    }
     targets(step.next).forEach((target) => {
       if (!keys.has(target)) fail(`steps[${i}].next`, `names a missing step "${target}"`);
     });
@@ -99,6 +104,21 @@ export function parseFlow(json: unknown): Flow {
   }
 
   const byKey = new Map(flow.steps.map((s) => [s.key, s]));
+  const reached = new Set<string>([flow.first]);
+  const queue = [flow.first];
+  for (let key = queue.pop(); key !== undefined; key = queue.pop()) {
+    for (const target of targets((byKey.get(key) as Step).next)) {
+      if (!reached.has(target)) {
+        reached.add(target);
+        queue.push(target);
+      }
+    }
+  }
+  const email = emailSteps[0] as Step;
+  if (!reached.has(email.key)) {
+    fail("steps", `the email step "${email.key}" is unreachable from first`);
+  }
+
   const state = new Map<string, "visiting" | "done">();
   const visit = (key: string): void => {
     const seen = state.get(key);
