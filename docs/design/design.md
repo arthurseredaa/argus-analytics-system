@@ -183,7 +183,7 @@ Each likely change has one place to change and one check:
 
 | Change | Place to change | Check to run |
 |---|---|---|
-| A fourth quiz question | A new `question_key` with its allowed values and step in the question catalog (Worker config), and a step in the page. No migration: `user_answers` is keyed by question. If the answer affects selection, also `select()` and its decision table | Completion test with the new key; the full test suite in CI, decision table included |
+| A fourth quiz question | A new step in the prelander's quiz flow config (one JSON file per prelander: steps with their question key, allowed values, wording and next step). The page renders from it, so no page code changes. No migration: `user_answers` is keyed by question. If the answer affects selection, also `select()` and its decision table | Completion test with the new key; the full test suite in CI, decision table included |
 | A new offer | The catalog script writes a new catalog version with the offer. No deploy | Rows for the offer in the decision table; after the script, `offer_selected` carries the new `catalog_version` |
 | A new partner | One `partners` row with its encrypted secret; its offers carry its `partner_id`. No deploy | A signed test postback through the helper gets `202`; an unsigned one gets `401` |
 | A new prelander | Its config and its page. No schema change: every event and click carries `prelander_id` | Demo script on the new prelander; the report shows its row |

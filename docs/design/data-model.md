@@ -57,7 +57,7 @@ Content-Type: application/json
 `visit_id` and `prelander_id` are there so the server events of this request carry the same visit and prelander as the browser's step events. The Worker then:
 
 1. takes the UserID from the cookie (ADR 0002) and ignores any user id in the body;
-2. validates each answer against the question catalog (the list of question keys, their allowed values and their step, kept in the Worker's config) and the email against a format check (Q-5); a failure answers `400` and writes nothing;
+2. validates each answer against the prelander's quiz flow config (one JSON file per prelander listing the steps with their question key, allowed values, wording and next step) and the email against a format check (Q-5); a failure answers `400` and writes nothing;
 3. in one D1 batch, which runs as a transaction: upserts the `users` row with the encrypted email, upserts one `user_answers` row per answer, and reads the user's Leads and the current catalog;
 4. runs `select(facts, catalog, "completion")` (ADR 0004);
 5. sends `quiz_completed` and `offer_selected` to the Queue;
@@ -396,7 +396,7 @@ To add something:
 - A new partner: insert one `partners` row with its encrypted secret and give the partner its secret. No deploy.
 - A new prelander: its config and its page. No schema change; attribution works because every event and every click carries `prelander_id`.
 - A new event type: send it from the client. The Worker and the loader already accept unknown types and versions; the report decides whether to use it.
-- A new quiz question: a new `question_key` in the question catalog and a step in the client. No migration, since `user_answers` is keyed by question.
+- A new quiz question: a new step in the prelander's quiz flow config; the page renders from it. No migration, since `user_answers` is keyed by question.
 - Offers restricted to a prelander: a `prelander_offers (prelander_id, offer_id)` table and one filter in the first step of `select()`, which receives the prelander as an input. A Lead return would then be filtered too, so a user with a Lead for an offer outside the new prelander's set would see the quiz there; whether that is wanted is a product decision.
 - Offer exclusion after Purchase (DES-5, Q-20): the same first step of `select()` drops offers the user has a Purchase for, read from `conversions`. No new table is needed.
 

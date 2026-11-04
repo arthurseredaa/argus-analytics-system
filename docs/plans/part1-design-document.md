@@ -302,6 +302,8 @@ Steps:
 
 Changed 2026-11-03: nothing is sent after this stage. The company does not review the design separately (`docs/ai/plan-history.md`), so the cover message is written at the end of Part 2 and the grill-me and evolution drills run before the hand-in. Stage 6 produces the Part 2 plan, and implementation starts from it.
 
+Changed 2026-11-04: the stage is skipped here and its drills run in Part 2 stage 10. Restoring it before the code was considered on 2026-11-04 and Arthur decided against it: the drills answered on paper would be answered again on the code a week later, so they run once, on the finished system. The commit closing stage 6 points `progress.json` at `part2-mvp-stages.md`.
+
 ---
 
 ## Schedule

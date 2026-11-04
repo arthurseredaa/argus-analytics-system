@@ -73,3 +73,15 @@ What changes:
 - The Cloudflare account and spend stay as Q-17 assumes: Arthur's own account, the cheapest plan the design needs, spend reported.
 
 Why: the two-step format was our proposal, not the company's requirement, and waiting for a review that will not happen costs the days the MVP needs.
+
+## 2026-11-04: Part 2 plan written, Cloudflare set up early
+
+Stage 6 of `docs/plans/part1-design-document.md` produced `docs/plans/part2-mvp-stages.md`: eleven stages, 0 to 10, with the end-to-end slice in stages 0 to 4. Stage 6 closed with: 19 sections, 51 checkboxes, 67 table rows, 0 em or en dashes, no empty cell in the requirement-to-stage mapping, a Verify step in all 11 stages, every relative link resolving, no email outside `@example.com`; Arthur named the slice and the irreducible core (funnel, selection, postbacks, events straight into D1 with the report read from it) in his own words. What changed around it:
+
+- Part 1 stage 7 stays skipped and its drills run in Part 2 stage 10. Restoring it before the code was considered on 2026-11-04 (a gap found on paper is cheaper than one found in code) and Arthur decided against it: the same drills would be answered again on the code a week later, so they run once, on the finished system. `progress.json` now follows `part2-mvp-stages.md`; the Part 1 stage record up to stage 5, with what each stage verified, is in the `progress.json` of commit b97a87e, and stage 6's closing is the paragraph above.
+- The Cloudflare account was prepared before Part 2 started: wrangler is logged in, R2 is enabled, the account is on Workers Free. The upgrade to Workers Paid waits for Part 2 stage 0. The Cloudflare plugin for Claude Code is enabled through `.claude/settings.json` and is part of the AI setup the spec asks for.
+- Decisions recorded in the Part 2 plan's decisions table, each with its owner and date: Hono and Zod; the quiz flow as data, one JSON file per prelander; integration tests in the Workers runtime, an HTTP end-to-end run and a manual browser smoke test; one environment, `main` deploys the one Worker; the team workflow in the README is feature branches with a preview deploy per pull request, merged into `main`, no `develop` branch and no release tags; no frontend framework; one Worker for every entry point rather than a monorepo, with the condition under which that changes; a short live task for the review, a fourth quiz question through the JSON config, with a CSV report as the backup.
+- Two environments were in the plan for a few hours on 2026-11-04 and were removed the same day: a second D1, Queue and bucket to keep, and hours on what the spec does not ask for.
+- design.md section 10 and data-model.md now describe the fourth quiz question as a new step in the prelander's flow config, with no page code change and no migration.
+
+The Part 1 schedule is not updated; it ended on 2026-11-02 and the dates in the Part 2 plan replace it.

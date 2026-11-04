@@ -6,3 +6,5 @@ node_modules/
 .env*
 coverage/
 *.pdf
+CLAUDE.local.md
+.claude/settings.local.json
