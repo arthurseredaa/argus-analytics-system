@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import catalogJson from "../../config/catalog-v1.json";
+import { encrypt, importAesKey } from "../../src/domain/crypto.ts";
 import { renderSql, seedStatements, type CatalogFile } from "../../src/db/seed.ts";
 
 const file = catalogJson as CatalogFile;
-const secrets = new Map([
-  ["partnerA", "v1:aaaa:bbbb"],
-  ["partnerB", "v1:cccc:dddd"],
+const key = await importAesKey(btoa("test-only-master-key-32-bytes!!!"), "MASTER_KEY");
+const secrets = new Map<string, string>();
+const PLAIN = new Map([
+  ["partnerA", "test-partner-a-secret"],
+  ["partnerB", "test-partner-b-secret"],
 ]);
+for (const [id, secret] of PLAIN) secrets.set(id, await encrypt(key, secret));
 
 describe("seed", () => {
   it("OFF-1 seed statements insert one catalog version and the seven offers", () => {
