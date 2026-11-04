@@ -15,14 +15,14 @@
       // ADR 0003: facts in D1.
       "binding": "FACTS",
       "database_name": "facts",
-      "database_id": "FACTS_DATABASE_ID",
+      "database_id": "604b68c8-7e22-4284-b0e0-2f68d4d40fe0",
       "migrations_dir": "migrations/facts",
     },
     {
       // ADR 0005: MVP stand-in for BigQuery.
       "binding": "EVENTS",
       "database_name": "events",
-      "database_id": "EVENTS_DATABASE_ID",
+      "database_id": "f1f91986-5816-4882-80d6-400bff6bd011",
       "migrations_dir": "migrations/events",
     },
   ],
