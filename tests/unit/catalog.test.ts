@@ -34,6 +34,14 @@ describe("catalog", () => {
     expect(catalogJson.offers.every((o) => o.active === true)).toBe(true);
   });
 
+  it("OFF-6 a duplicate offer id is reported and the repeat is excluded", () => {
+    const rows = rowsV1();
+    const { catalog, errors } = parseCatalog(1, [...rows, { ...rows[0]!, name: "Repeat" }]);
+    expect(errors).toEqual([{ offerId: rows[0]!.id, problem: "offer id is not unique" }]);
+    expect(catalog.offers).toHaveLength(7);
+    expect(catalog.offers.find((o) => o.id === rows[0]!.id)?.name).toBe(rows[0]!.name);
+  });
+
   it("OFF-6 incomplete offer row is excluded and reported", () => {
     const rows = rowsV1().map((r) => (r.id === "006" ? { ...r, ethnicity: "" } : r));
     const { catalog, errors } = parseCatalog(1, rows);

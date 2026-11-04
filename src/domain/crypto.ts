@@ -66,13 +66,14 @@ export async function encrypt(key: CryptoKey, plaintext: string): Promise<string
 }
 
 export async function decrypt(key: CryptoKey, token: string): Promise<string> {
-  const [version, iv, ct] = token.split(":");
-  if (version !== "v1" || !iv || !ct) throw new Error("unsupported ciphertext format");
-  const plain = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: fromBase64(iv) },
-    key,
-    fromBase64(ct),
-  );
+  const parts = token.split(":");
+  const [version, ivText, ct] = parts;
+  if (parts.length !== 3 || version !== "v1" || !ivText || !ct) {
+    throw new Error("unsupported ciphertext format");
+  }
+  const iv = fromBase64(ivText);
+  if (iv.length !== 12) throw new Error("unsupported ciphertext format");
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, fromBase64(ct));
   return dec.decode(plain);
 }
 

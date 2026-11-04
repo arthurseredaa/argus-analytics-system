@@ -80,6 +80,7 @@ export type Completion = {
 // Upserts the user and the answers, then reads the facts back in the same transaction, so
 // select() runs on what is stored even if a later completion won the received_at race.
 export async function completeQuiz(db: D1Database, w: Completion): Promise<FactsRead> {
+  const keys = Object.keys(w.answers);
   const writes = [
     db
       .prepare(
@@ -91,6 +92,15 @@ export async function completeQuiz(db: D1Database, w: Completion): Promise<Facts
            WHERE excluded.last_completed_at > users.last_completed_at`,
       )
       .bind(w.userId, w.emailEnc, w.emailHash, w.receivedAt),
+    // One request carries the final state of the quiz: drop older answers it no longer holds.
+    // The received_at guard keeps a late older request from deleting newer rows.
+    db
+      .prepare(
+        `DELETE FROM user_answers
+         WHERE user_id = ?1 AND received_at < ?2
+           AND question_key NOT IN (${keys.map((_, i) => `?${i + 3}`).join(", ")})`,
+      )
+      .bind(w.userId, w.receivedAt, ...keys),
     ...Object.entries(w.answers).map(([key, value]) =>
       db
         .prepare(

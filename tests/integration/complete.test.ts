@@ -1,7 +1,9 @@
 import { env } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.ts";
+import demoJson from "../../config/prelanders/demo.json";
 import { decrypt, emailHash, importAesKey, importHmacKey } from "../../src/domain/crypto.ts";
+import { parseFlow } from "../../src/domain/flow.ts";
 import { prelanderFlows } from "../../src/domain/prelanders.ts";
 import { newCookie, postComplete } from "../fixtures/http.ts";
 
@@ -154,6 +156,33 @@ describe("POST /api/complete", () => {
       .bind(idOf(cookie))
       .first<{ n: number }>();
     expect(n!.n).toBe(1);
+  });
+
+  it("QZ-4 a later completion that skips a step removes that step's old answer", async () => {
+    // men skip the ethnicity step and go straight to the email step.
+    const branching = parseFlow({
+      ...demoJson,
+      steps: demoJson.steps.map((s) =>
+        s.key === "gender"
+          ? {
+              ...s,
+              next: {
+                branches: [{ when: { if: "women" }, goto: "ethnicity" }],
+                otherwise: "email",
+              },
+            }
+          : s,
+      ),
+    });
+    const app = createApp(new Map([["demo", branching]]));
+    const cookie = newCookie();
+    expect((await postComplete(make("women", "asia"), cookie, app)).status).toBe(200);
+    expect(await answerOf(cookie, "ethnicity")).toBe('"asia"');
+    await new Promise((r) => setTimeout(r, 5));
+    const body = { prelander_id: "demo", answers: { gender: "men" }, email: "user1@example.com" };
+    expect((await postComplete(body, cookie, app)).status).toBe(200);
+    expect(await answerOf(cookie, "gender")).toBe('"men"');
+    expect(await answerOf(cookie, "ethnicity")).toBeUndefined();
   });
 
   it("QZ-1 unknown prelander in the body is rejected", async () => {

@@ -56,11 +56,13 @@ export function parseCatalog(
 ): { catalog: Catalog; errors: CatalogError[] } {
   const offers: Offer[] = [];
   const errors: CatalogError[] = [];
+  const seen = new Set<string>();
   for (const row of rows) {
     const genders = parseGenders(row.genders);
     const kind = toKind(row.kind);
     let problem: string | null = null;
-    if (!ETHNICITIES.includes(row.ethnicity)) problem = "ethnicity is missing or unknown";
+    if (seen.has(row.id)) problem = "offer id is not unique";
+    else if (!ETHNICITIES.includes(row.ethnicity)) problem = "ethnicity is missing or unknown";
     else if (genders === null) problem = "genders is not a non-empty list of women/men";
     else if (kind === null) problem = "kind is unknown";
     else if (typeof row.epu !== "number" || !Number.isFinite(row.epu) || row.epu < 0)
@@ -71,6 +73,7 @@ export function parseCatalog(
       errors.push({ offerId: row.id, problem: problem ?? "invalid row" });
       continue;
     }
+    seen.add(row.id);
     offers.push({
       id: row.id,
       partnerId: row.partner_id,

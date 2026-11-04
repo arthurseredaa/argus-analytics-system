@@ -51,6 +51,17 @@ describe("test routes", () => {
     expect((await getPath("/__test/reset", undefined, app, off, "POST")).status).toBe(404);
   });
 
+  it.each([
+    ["ON", { TEST_ROUTES: "ON" }],
+    ["empty", { TEST_ROUTES: "" }],
+    // The variable is absent, not just empty; the cast is for exactOptionalPropertyTypes.
+    ["missing", { TEST_ROUTES: undefined } as unknown as Partial<Env>],
+  ] as const)("R-12 test endpoints answer 404 when TEST_ROUTES is %s", async (_label, override) => {
+    const app = createApp(prelanderFlows);
+    expect((await getPath("/__test/state", undefined, app, override)).status).toBe(404);
+    expect((await getPath("/__test/reset", undefined, app, override, "POST")).status).toBe(404);
+  });
+
   it("PB-3 test state confirms partner secrets decrypt under the worker key", async () => {
     const ok = (await (await getPath("/__test/state")).json()) as State;
     expect(ok.partner_secrets_ok).toBe(true);

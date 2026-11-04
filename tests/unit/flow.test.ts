@@ -22,6 +22,9 @@ const withStep = (key: string, patch: Record<string, unknown>) => ({
   steps: demoJson.steps.map((s) => (s.key === key ? { ...s, ...patch } : s)),
 });
 
+const branch = (when: unknown) =>
+  withStep("gender", { next: { branches: [{ when, goto: "email" }], otherwise: "ethnicity" } });
+
 describe("quiz flow", () => {
   it("QZ-1 step 1 asks for the partner's gender with women and men", () => {
     const gender = step("gender");
@@ -168,6 +171,29 @@ describe("quiz flow", () => {
   });
   it("QZ-7 a flow whose email step is unreachable is rejected", () => {
     expect(() => parseFlow(withStep("ethnicity", { next: "gender" }))).toThrow(/unreachable/);
+  });
+
+  it("QZ-7 a branch on a value the step does not offer is rejected", () => {
+    expect(() => parseFlow(branch({ if: "robots" }))).toThrow(/steps\[0\]\.next.*"robots"/);
+    expect(() => parseFlow(branch({ some: [{ if: "men" }, { if: "robots" }] }))).toThrow(
+      /"robots"/,
+    );
+    expect(() => parseFlow(branch({ not: { if: "robots" } }))).toThrow(/"robots"/);
+    expect(() =>
+      parseFlow(branch({ some: [{ if: "men" }, { not: { if: "women" } }] })),
+    ).not.toThrow();
+  });
+  it("QZ-7 a step unreachable from first is rejected even without a cycle", () => {
+    const orphan = {
+      key: "orphan",
+      kind: "choice",
+      wording: "Never asked",
+      options: [{ value: "x", label: "X" }],
+      next: "email",
+    };
+    expect(() => parseFlow({ ...demoJson, steps: [...demoJson.steps, orphan] })).toThrow(
+      /"orphan" is unreachable/,
+    );
   });
 
   it("QZ-7 prelanderFlows holds the demo flow", () => {

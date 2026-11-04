@@ -33,6 +33,46 @@ describe("crypto", () => {
     await expect(decrypt(k2, token)).rejects.toMatchObject({ name: "OperationError" });
   });
 
+  it("DEMO-8 P-5 a token with an extra segment is rejected", async () => {
+    const k = await importAesKey(KEY_A, "MASTER_KEY");
+    const token = await encrypt(k, "user1@example.com");
+    await expect(decrypt(k, `${token}:extra`)).rejects.toThrow("unsupported ciphertext format");
+  });
+
+  it("DEMO-8 P-5 a token with another version is rejected", async () => {
+    const k = await importAesKey(KEY_A, "MASTER_KEY");
+    const token = await encrypt(k, "user1@example.com");
+    await expect(decrypt(k, token.replace(/^v1/, "v2"))).rejects.toThrow(
+      "unsupported ciphertext format",
+    );
+  });
+
+  it("DEMO-8 P-5 a token with a 16-byte IV is rejected", async () => {
+    const k = await importAesKey(KEY_A, "MASTER_KEY");
+    const ct = (await encrypt(k, "user1@example.com")).split(":")[2];
+    const iv = btoa("0123456789abcdef");
+    await expect(decrypt(k, `v1:${iv}:${ct}`)).rejects.toThrow("unsupported ciphertext format");
+  });
+
+  it("DEMO-8 P-5 a tampered ciphertext does not decrypt", async () => {
+    const k = await importAesKey(KEY_A, "MASTER_KEY");
+    const [version, iv, ct] = (await encrypt(k, "user1@example.com")).split(":");
+    const bytes = Uint8Array.from(atob(ct!), (c) => c.charCodeAt(0));
+    bytes[0] = (bytes[0] ?? 0) ^ 1;
+    const tampered = btoa(String.fromCharCode(...bytes));
+    await expect(decrypt(k, `${version}:${iv}:${tampered}`)).rejects.toMatchObject({
+      name: "OperationError",
+    });
+  });
+
+  it("DEMO-8 P-5 a valid base64 key of 16 bytes is a config error naming the variable", async () => {
+    const short = btoa("0123456789abcdef");
+    const err = await importAesKey(short, "MASTER_KEY").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ConfigError);
+    expect((err as ConfigError).variable).toBe("MASTER_KEY");
+    expect((err as Error).message).not.toContain(short);
+  });
+
   it("DEMO-8 P-5 email hash ignores case and surrounding spaces", async () => {
     const h = await importHmacKey(HASH_KEY, "EMAIL_HASH_KEY");
     const a = await emailHash(h, " User1@Example.com ");

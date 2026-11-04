@@ -92,6 +92,18 @@ export function parseFlow(json: unknown): Flow {
     if (step.kind === "choice" && ends) {
       fail(`steps[${i}].next`, "a choice step must lead on to the email step, not end the flow");
     }
+    if (typeof step.next === "object" && step.next !== null) {
+      const offered = new Set((step.options ?? []).map((o) => o.value));
+      const check = (condition: Condition): void => {
+        if ("if" in condition) {
+          if (!offered.has(condition.if)) {
+            fail(`steps[${i}].next`, `a branch tests "${condition.if}", which is not an option`);
+          }
+        } else if ("some" in condition) condition.some.forEach(check);
+        else check(condition.not);
+      };
+      step.next.branches.forEach((b) => check(b.when));
+    }
     targets(step.next).forEach((target) => {
       if (!keys.has(target)) fail(`steps[${i}].next`, `names a missing step "${target}"`);
     });
@@ -115,10 +127,11 @@ export function parseFlow(json: unknown): Flow {
       }
     }
   }
-  const email = emailSteps[0] as Step;
-  if (!reached.has(email.key)) {
-    fail("steps", `the email step "${email.key}" is unreachable from first`);
-  }
+  flow.steps.forEach((step, i) => {
+    if (!reached.has(step.key)) {
+      fail(`steps[${i}]`, `the step "${step.key}" is unreachable from first`);
+    }
+  });
 
   const state = new Map<string, "visiting" | "done">();
   const visit = (key: string): void => {

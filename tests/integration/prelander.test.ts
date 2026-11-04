@@ -69,6 +69,8 @@ describe("GET /p/:prelander", () => {
     const html = await res.text();
     expect(stepKeys(html)).toEqual(["gender", "ethnicity", "email"]);
     expect(html.split("/api/complete").length - 1).toBe(1);
+    // Without the script the form must not GET the email into the query string.
+    expect(html).toMatch(/<form[^>]*\bmethod="post"/);
   });
 
   it("QZ-1 step 1 offers women and men", async () => {

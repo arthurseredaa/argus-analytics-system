@@ -31,7 +31,7 @@ function stepHtml(step: Step, hidden: boolean): string {
   const title = `<h2>${wordingHtml(step.wording)}</h2>`;
   if (step.kind === "email") {
     return `${open}${title}
-  <form data-email-form novalidate>
+  <form data-email-form method="post" novalidate>
     <input type="email" name="email" required maxlength="254" autocomplete="email" aria-label="Email">
     <button type="submit">Continue</button>
     <p data-error hidden>Something went wrong. Please try again.</p>
