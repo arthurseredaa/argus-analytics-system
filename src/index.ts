@@ -1,10 +1,9 @@
 // The one Worker: HTTP, queue and cron entry points all live here.
 // The folders under src/ are its modules, not separate deployables.
-import { Hono } from "hono";
+import { createApp } from "./app.ts";
+import { prelanderFlows } from "./domain/prelanders.ts";
 
-export const app = new Hono<{ Bindings: Env }>();
-
-app.get("/healthz", (c) => c.json({ sha: c.env.GIT_SHA }));
+export const app = createApp(prelanderFlows);
 
 export default {
   fetch: app.fetch,
