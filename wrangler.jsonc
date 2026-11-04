@@ -1,0 +1,50 @@
+{
+  "name": "funnels-analytics-events",
+  "main": "src/index.ts",
+  // Capped by the newest date the workerd bundled with @cloudflare/vitest-plugin accepts.
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 },
+  },
+  "vars": { "GIT_SHA": "dev" },
+  "d1_databases": [
+    {
+      // ADR 0003: facts in D1.
+      "binding": "FACTS",
+      "database_name": "facts",
+      "database_id": "604b68c8-7e22-4284-b0e0-2f68d4d40fe0",
+      "migrations_dir": "migrations/facts",
+    },
+    {
+      // ADR 0005: MVP stand-in for BigQuery.
+      "binding": "EVENTS",
+      "database_name": "events",
+      "database_id": "f1f91986-5816-4882-80d6-400bff6bd011",
+      "migrations_dir": "migrations/events",
+    },
+  ],
+  "queues": {
+    // ADR 0005: event ingestion queue.
+    "producers": [{ "binding": "EVENTS_QUEUE", "queue": "events" }],
+    "consumers": [
+      {
+        "queue": "events",
+        "max_batch_size": 100,
+        "max_batch_timeout": 30,
+        "max_retries": 10,
+        "dead_letter_queue": "events-dlq",
+      },
+    ],
+  },
+  "r2_buckets": [
+    // ADR 0005: raw event archive.
+    { "binding": "EVENTS_BUCKET", "bucket_name": "funnels-events" },
+  ],
+  "analytics_engine_datasets": [
+    // docs/design/metrics-and-operations.md: metrics and reliability numbers.
+    { "binding": "METRICS", "dataset": "funnels_metrics" },
+  ],
+}

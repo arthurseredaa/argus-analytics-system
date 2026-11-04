@@ -6,13 +6,15 @@
     {
       "id": 0,
       "title": "Project setup and first deploy",
-      "status": "next",
-      "notes": "Part 1 (docs/plans/part1-design-document.md) closed on 2026-11-04 with stage 6 done and stage 7 skipped, its drills moved to stage 10 here. The Part 1 record is in the progress.json of commit b97a87e and in docs/ai/plan-history.md (2026-11-04 entry). Before this stage: upgrade the Cloudflare account to Workers Paid."
+      "status": "done",
+      "notes": "Built through subagent-driven development from docs/plans/part2-stage-0-setup.md: four tasks, a review per task, a final whole-branch review on Opus and one fix wave. Decisions by Arthur during the stage: events.user_id nullable (a Lead or Purchase whose click lost its user), events.event_id NOT NULL (SQLite allows NULL in a TEXT primary key), 14-day retention on both queues per ADR 0005, deploy secrets in the GitHub Environment argus-cloudflare restricted to main, an account API token with four Edit scopes and 90 days expiry, .worktreeinclude for local-only files. Setup traps found on the way: the test package is now @cloudflare/vitest-plugin, compatibility_date is capped by the test runtime (2026-11-03), wrangler types needs --strict-vars=false. The two D1 databases already existed on the account (created 2026-11-04 18:14Z) and were reused. Explain-back: Arthur described the two D1 databases and the R2 path himself and asked about logs, Queues, Analytics Engine and bindings, which were explained.",
+      "closed": "2026-11-04",
+      "verified": "pnpm typecheck && pnpm lint && pnpm fmt:check && pnpm test (6 passed, 2 files); CI check job green on PR #1; remote sqlite_master: facts has the 8 tables of data-model.md, events has events (event_id NOT NULL PRIMARY KEY; client_time, seq, user_id nullable); both queues at 1209600 s retention (dashboard); environment argus-cloudflare holds both secrets and allows only main. GET /healthz on the deployed Worker is checked against the merge commit right after this commit deploys."
     },
     {
       "id": 1,
       "title": "Identity, selection and the quiz",
-      "status": "pending"
+      "status": "next"
     },
     {
       "id": 2,

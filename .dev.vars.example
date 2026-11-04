@@ -1,0 +1,2 @@
+# Secrets come in later stages. Copy to .dev.vars for local runs.
+GIT_SHA=dev

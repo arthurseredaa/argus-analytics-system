@@ -326,7 +326,7 @@ Every event has the same envelope (ADR 0005). One event per request (Arthur's de
 | `type` | creator | one of the types below, or a new one |
 | `client_time` | browser; null for server events | the browser's clock, for display only |
 | `received_at` | Worker | server receive time; the ordering key for analytics |
-| `user_id` | Worker, from the cookie; for `lead` and `purchase` from the click | a `user_id` in the body is ignored |
+| `user_id` | Worker, from the cookie; for `lead` and `purchase` from the click; null when the click's user was deleted | a `user_id` in the body is ignored |
 | `visit_id` | Worker at entry, written into the page; browser repeats it | one load of the prelander (Q-26) |
 | `seq` | browser, position in the visit starting at 1; null for server events | ordering within a visit |
 | `prelander_id` | from the path at entry, from the request body or query otherwise, from the click for `lead` and `purchase` | breakdown by prelander (AN-2) |
