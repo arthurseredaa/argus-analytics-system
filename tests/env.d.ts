@@ -6,6 +6,7 @@ declare namespace Cloudflare {
   interface Env {
     TEST_FACTS_MIGRATIONS: D1Migration[];
     TEST_EVENTS_MIGRATIONS: D1Migration[];
+    TEST_ROUTES: string;
   }
 }
 

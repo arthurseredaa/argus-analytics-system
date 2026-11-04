@@ -27,6 +27,9 @@ export default defineConfig(async () => {
                 bindings: {
                   TEST_FACTS_MIGRATIONS: factsMigrations,
                   TEST_EVENTS_MIGRATIONS: eventsMigrations,
+                  MASTER_KEY: btoa("test-only-master-key-32-bytes!!!"),
+                  EMAIL_HASH_KEY: btoa("test-only-email-hash-key-32byte!"),
+                  TEST_ROUTES: "on",
                 },
               },
             }),

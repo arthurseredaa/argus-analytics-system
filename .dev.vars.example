@@ -1,2 +1,11 @@
-# Secrets come in later stages. Copy to .dev.vars for local runs.
+# Copy to .dev.vars for local runs. Fill each value; never commit them.
+# openssl rand -base64 32
+MASTER_KEY=
+# openssl rand -base64 32
+EMAIL_HASH_KEY=
+# openssl rand -base64 32
+PARTNER_SECRET_PARTNERA=
+# openssl rand -base64 32
+PARTNER_SECRET_PARTNERB=
+TEST_ROUTES=on
 GIT_SHA=dev

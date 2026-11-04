@@ -6,9 +6,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "seed": "node scripts/seed.ts",
     "types": "wrangler types --strict-vars=false",
-    "typecheck": "wrangler types --strict-vars=false && tsc --noEmit",
-    "lint": "oxlint src tests",
+    "typecheck": "wrangler types --strict-vars=false && tsc --noEmit && tsc --noEmit -p tsconfig.scripts.json",
+    "lint": "oxlint src tests scripts",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.5.1",
+    "@types/node": "24.19.2",
     "oxfmt": "0.76.0",
     "oxlint": "1.91.0",
     "typescript": "5.9.3",
