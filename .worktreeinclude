@@ -1,0 +1,13 @@
+# Gitignored files Claude Code copies into every new worktree.
+# Generated or reinstallable files (node_modules, .wrangler, worker-configuration.d.ts) are left out:
+# pnpm install, pnpm migrate:local and pnpm typecheck recreate them.
+
+# Local agent instructions and permissions
+CLAUDE.local.md
+.claude/settings.local.json
+
+# The assignment spec (*.pdf is ignored)
+requirements.pdf
+
+# Local Worker secrets for wrangler dev, once they exist
+.dev.vars
