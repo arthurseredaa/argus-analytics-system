@@ -14,12 +14,15 @@
     {
       "id": 1,
       "title": "Identity, selection and the quiz",
-      "status": "next"
+      "status": "done",
+      "notes": "Built through subagent-driven development from docs/plans/part2-stage-1-quiz.md, with a review per task, a final whole-branch review and one fix wave. A second review of the PR by five small reviewers, one per area, found six defects, all fixed in the PR: a later completion now removes older answers it no longer carries; parseFlow rejects branch values a step does not offer and steps unreachable from first; decrypt accepts only v1:iv:ct with a 12-byte IV; the email form posts; parseCatalog reports a repeated offer id; the TEST_ROUTES gate is tested on ON, empty and missing. Decisions by Arthur: test routes are on for the deployed demo (TEST_ROUTES is off in wrangler.jsonc and CI deploys with --var TEST_ROUTES:on), and everything user-facing is in English, so the no-offer text is \"No offer available\". Tooling added in the stage: a Claude Code PostToolUse hook runs oxfmt and oxlint on every edited file, and oxlint now runs the suspicious category and the vitest plugin and fails on warnings. Traps: `pnpm test -t \"X\"` filters, while `pnpm test -- -t \"X\"` runs everything; the global Env needs augmenting for typecheck without .dev.vars; secret values cannot be read back from Cloudflare, so .dev.vars.remote is the only copy. Deferred: no body size cap on /api/complete; re-seeding keeps an old partner secret (rotation per ADR 0007 is not built yet); two completions in the same millisecond keep the first; moving the identity middleware.",
+      "closed": "2026-11-04",
+      "verified": "pnpm typecheck && pnpm lint && pnpm fmt:check && pnpm test (138 passed, 13 files); CI check job green on PR #2. GET /healthz, the remote seed, DEMO-2 and partner_secrets_ok are checked against the merge commit right after this commit deploys."
     },
     {
       "id": 2,
       "title": "Events",
-      "status": "pending"
+      "status": "next"
     },
     {
       "id": 3,

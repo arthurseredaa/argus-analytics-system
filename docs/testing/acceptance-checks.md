@@ -42,11 +42,11 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 |---|---|---|
 | Prelander entry | `GET /p/{prelanderId}`. Sets the identity cookie, renders the quiz, or answers 302 for a lead return. Writes nothing to D1 for a new user. A lead return creates a new click row. | ADR 0002, ADR 0004 |
 | Event ingestion | `POST /api/events` with one event per request: `{"event_id","schema_version","type","client_time","visit_id","seq","prelander_id","payload"}`. The Worker adds `user_id` (from the cookie) and `received_at`. Answers 202. Analytics only: a step event never writes D1. The envelope has no field for an email. | ADR 0005, `docs/design/data-model.md` |
-| Quiz completion and offer selection | `POST /api/complete` with `{"answers":{"gender":"women","ethnicity":"asia"},"email":"u1@example.com"}`, sent once after the email step. Creates the `users` row and writes the answers and the encrypted email to D1. Answers `{"offer_id","name","url","reason","catalog_version"}`. Replaces `POST /api/select`. The latest accepted answer is the completion request the server received last. A user who stops before the email step has no rows in D1. | ADR 0004, `docs/design/data-model.md` |
+| Quiz completion and offer selection | `POST /api/complete` with `{"prelander_id":"demo","answers":{"gender":"women","ethnicity":"asia"},"email":"u1@example.com"}`, sent once after the email step. Creates the `users` row and writes the answers and the encrypted email to D1. Answers `{"offer_id","name","url","reason","catalog_version"}`. Replaces `POST /api/select`. The latest accepted answer is the completion request the server received last. A user who stops before the email step has no rows in D1. | ADR 0004, `docs/design/data-model.md` |
 | Transition | `GET /go/{offerId}`. Re-checks offer status, stores the click, answers 302 with the click id in the `Location` query. | ADR 0004, ADR 0007 |
 | Postback | `POST /postback/v1/{partner}` with JSON `{"click_id","type","transaction_id","occurred_at","payout?","currency?"}` and the header `X-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 over "t.body">`, per ADR 0007. | ADR 0007 |
 | Report | `GET /api/report?from=&to=&prelander=&offer=&view=cohort\|postback`, and the `/report` page. | stage 4 metrics |
-| Test state | `GET /__test/state`: the caller's user (from the cookie) and global counts. `POST /__test/reset`. `POST /__test/seed` with users, answers, clicks and Leads as JSON, for cases that are slow to reach through the UI, such as a Lead on 001 or a click dated yesterday. All three answer 404 in production. | ADR 0003 |
+| Test state | `GET /__test/state`: the caller's user (from the cookie) and global counts. `POST /__test/reset`. `POST /__test/seed` with users, answers, clicks and Leads as JSON, for cases that are slow to reach through the UI, such as a Lead on 001 or a click dated yesterday. All three answer `404` unless `TEST_ROUTES` is `on`. The deployed demo has it on (decision 1 of the stage 1 plan); a production deploy leaves it off. | ADR 0003 |
 | Offer config | `pnpm offer set-status 006 inactive`, `pnpm offer set-epu 001 0.95`. A data change, no deploy (Q-9). | ADR 0003 |
 | Signed postback helper | `pnpm postback lead --click <id> --txn <id>` prints the HTTP status and body (P-10). | ADR 0007 |
 
@@ -61,7 +61,7 @@ answer() { # answer <jar> <type> <value> [seq]: one event per request, analytics
 }
 complete() { # complete <jar> <gender> <ethnicity> <email>: the only call that writes answers and email to D1
   curl -s -b "$1" -c "$1" -X POST "$BASE/api/complete" -H 'content-type: application/json' \
-    -d "{\"answers\":{\"gender\":\"$2\",\"ethnicity\":\"$3\"},\"email\":\"$4\"}"
+    -d "{\"prelander_id\":\"demo\",\"answers\":{\"gender\":\"$2\",\"ethnicity\":\"$3\"},\"email\":\"$4\"}"
 }
 ```
 
@@ -185,7 +185,7 @@ Manual:
 2. Same request with a new jar.
 3. Read the `Set-Cookie` header from step 1.
 
-Expected: steps 1 give the same cookie `user_id` in `state`, step 2 a different one (neither has a users row until completion). The cookie is `HttpOnly`, `Secure` (on staging) and `SameSite=Lax`, and holds a random id, not an email or a counter.
+Expected: steps 1 give the same cookie `user_id` in `state`, step 2 a different one (neither has a users row until completion). The cookie is `HttpOnly`, `Secure` (on the deployed Worker) and `SameSite=Lax`, and holds a random id, not an email or a counter.
 
 ### ID-3 An email alone does not confirm identity
 
@@ -286,7 +286,7 @@ Automated: `pnpm test -- -t "OFF-8"`. Cases: decision table rows 9 and 21. UI ca
 
 Manual: `pnpm offer set-status 007 inactive`, women + latam in the browser. Restore 007.
 
-Expected: `POST /api/complete` returns reason `no_offer` and no URL. The page shows «Немає доступного офера». `GET /go/007` does not answer 302.
+Expected: `POST /api/complete` returns reason `no_offer` and no URL. The page shows `No offer available`. `GET /go/007` does not answer 302.
 
 ### OFF-9 A Lead for a disabled offer gives no redirect right
 
@@ -815,9 +815,9 @@ Manual:
 1. Run the DEMO-8 manual steps.
 2. With `wrangler tail` running, send a `POST /api/complete` with invalid JSON around `user2@example.com`, then a body that makes the handler throw. Then send one valid `complete` for `user2@example.com`, and one `POST /api/events` event with an extra `email` field holding the same address.
 3. `grep -c "user2@example.com" $TMP/tail.log`. Scan the Queue messages, R2 files and events table as in DEMO-8 step 5.
-4. `curl -s -o /dev/null -w '%{http_code}\n' <production url>/__test/state`.
+4. `pnpm test -t "R-12 test endpoints answer 404"`. The deployed demo has `TEST_ROUTES` on, so the `404` is shown by this test with the flag off, not by a request to the demo.
 
-Expected: step 3 prints 0 for the log and 0 for the Queue, R2 and events scan. Step 4 prints 404.
+Expected: step 3 prints 0 for the log and 0 for the Queue, R2 and events scan. Step 4 passes.
 
 ### R-14 Abusive clients are limited
 

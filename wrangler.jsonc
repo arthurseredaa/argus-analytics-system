@@ -9,7 +9,9 @@
     "logs": { "enabled": true, "head_sampling_rate": 1 },
     "traces": { "enabled": true, "head_sampling_rate": 0.1 },
   },
-  "vars": { "GIT_SHA": "dev" },
+  // TEST_ROUTES is "off" here (R-12: /__test/* answers 404). The CI deploy turns it on for the
+  // demo (decision 1 of the stage 1 plan); a production deploy drops that flag.
+  "vars": { "GIT_SHA": "dev", "TEST_ROUTES": "off" },
   "d1_databases": [
     {
       // ADR 0003: facts in D1.

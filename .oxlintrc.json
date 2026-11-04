@@ -1,4 +1,7 @@
 {
+  "plugins": ["typescript", "unicorn", "oxc", "vitest"],
+  "categories": { "correctness": "error", "suspicious": "error" },
+  "rules": { "vitest/valid-expect": ["error", { "maxArgs": 2 }] },
   "ignorePatterns": [
     "node_modules",
     ".wrangler",
