@@ -190,6 +190,42 @@ describe("POST /api/complete", () => {
     }
   });
 
+  it("R-12 an answer key holding an email is not echoed or logged", async () => {
+    const spies = spyConsole();
+    const app = createApp(prelanderFlows);
+    const cookie = newCookie();
+    const res = await postComplete(
+      {
+        prelander_id: "demo",
+        answers: { gender: "women", ethnicity: "asia", "user2@example.com": "x" },
+        email: "user1@example.com",
+      },
+      cookie,
+      app,
+    );
+    expect(res.status).toBe(400);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({ error: "invalid_body", fields: ["answers.<unknown>"] });
+    const logged = spies.flatMap((s) => s.mock.calls.flat().map(String));
+    for (const t of [text, ...logged]) expect(t).not.toContain("user2@example");
+    expect(await userRow(cookie)).toBeNull();
+  });
+
+  it("R-12 exception path names EMAIL_HASH_KEY when that secret is bad", async () => {
+    const spies = spyConsole();
+    const app = createApp(prelanderFlows);
+    const cookie = newCookie();
+    const res = await postComplete(make("women", "asia"), cookie, app, {
+      EMAIL_HASH_KEY: "not-base64",
+    });
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "config_error" });
+    const logged = spies.flatMap((s) => s.mock.calls.flat().map(String)).join("\n");
+    expect(logged).toContain("EMAIL_HASH_KEY");
+    expect(logged).not.toContain("user1@example.com");
+    expect(await userRow(cookie)).toBeNull();
+  });
+
   it("R-12 exception path redacts the request body", async () => {
     const spies = spyConsole();
     const app = createApp(prelanderFlows);

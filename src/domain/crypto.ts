@@ -4,8 +4,10 @@
 
 // A missing or malformed secret. The message names the variable, never its value.
 export class ConfigError extends Error {
-  constructor(message: string) {
+  readonly variable: string;
+  constructor(variable: string, message: string) {
     super(message);
+    this.variable = variable;
     this.name = "ConfigError";
   }
 }
@@ -34,7 +36,7 @@ function keyBytes(base64: string | undefined, name: string): Uint8Array<ArrayBuf
     bytes = null;
   }
   if (bytes === null || bytes.length !== 32) {
-    throw new ConfigError(`${name} must be base64 of exactly 32 bytes`);
+    throw new ConfigError(name, `${name} must be base64 of exactly 32 bytes`);
   }
   return bytes;
 }

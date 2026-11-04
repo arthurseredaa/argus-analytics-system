@@ -20,9 +20,23 @@ const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // One JSON object per line; callers pass field names and counts, never request values.
 const log = (line: Record<string, unknown>) => console.log(JSON.stringify(line));
 
-function rejected(fields: string[]): { error: "invalid_body"; fields: string[] } {
-  log({ msg: "complete_rejected", fields });
-  return { error: "invalid_body", fields };
+// A field path may carry a key the client chose, so only the flow's own step keys are named.
+function safeFields(flow: Flow | undefined, fields: readonly string[]): string[] {
+  const stepKeys = new Set(flow?.steps.map((s) => s.key));
+  const out = fields.map((f) => {
+    if (!f.startsWith("answers.")) return f;
+    return stepKeys.has(f.slice("answers.".length)) ? f : "answers.<unknown>";
+  });
+  return [...new Set(out)];
+}
+
+function rejected(
+  flow: Flow | undefined,
+  fields: readonly string[],
+): { error: "invalid_body"; fields: string[] } {
+  const safe = safeFields(flow, fields);
+  log({ msg: "complete_rejected", fields: safe });
+  return { error: "invalid_body", fields: safe };
 }
 
 export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
@@ -34,14 +48,14 @@ export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
     try {
       raw = JSON.parse(await c.req.text());
     } catch {
-      return c.json(rejected([]), 400);
+      return c.json(rejected(undefined, []), 400);
     }
     const parsed = bodySchema.safeParse(raw);
     if (!parsed.success) {
       const fields = [...new Set(parsed.error.issues.map((i) => i.path.join(".")))].filter(
         (f) => f !== "",
       );
-      return c.json(rejected(fields), 400);
+      return c.json(rejected(undefined, fields), 400);
     }
     const body = parsed.data;
 
@@ -49,11 +63,11 @@ export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
     if (flow === undefined) return c.json({ error: "unknown_prelander" }, 400);
 
     const checked = validateAnswers(flow, body.answers);
-    if (!checked.ok) return c.json(rejected(checked.fields), 400);
+    if (!checked.ok) return c.json(rejected(flow, checked.fields), 400);
 
     const email = body.email.trim();
     if (email.length < 3 || email.length > 254 || !EMAIL_FORMAT.test(email))
-      return c.json(rejected(["email"]), 400);
+      return c.json(rejected(flow, ["email"]), 400);
 
     let emailEnc: string;
     let hash: string;
@@ -64,8 +78,7 @@ export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
       hash = await emailHash(hmac, email);
     } catch (err) {
       if (!(err instanceof ConfigError)) throw err;
-      // The message starts with the variable's name and holds no value.
-      log({ msg: "config_error", name: err.message.split(" ")[0] });
+      log({ msg: "config_error", name: err.variable });
       return c.json({ error: "config_error" }, 500);
     }
 
