@@ -83,3 +83,13 @@ EventID rule: an EventID is created where the event is created.
 
 ## Outcome
 
+2026-11-04, stage 1 of Part 2. The decision held.
+
+- The server sets the `uid` cookie on the first response: HttpOnly, Secure, SameSite=Lax, Path=/, Max-Age=34560000, no Domain, so on workers.dev it is host-only.
+- A malformed cookie value is replaced with a new user id.
+- A user id sent in the completion body is ignored.
+- No D1 row exists until the user completes the quiz.
+
+Tests that passed: "ID-1 first visit sets a user id cookie and writes no D1 row", "ID-2 cookie is HttpOnly, Secure, SameSite=Lax, Path=/, Max-Age=34560000 on the page", "ID-2 second visit with the same cookie keeps the user id", "ID-2 R-1 visit without the cookie creates a new user", "ID-2 malformed cookie value is replaced", "ID-2 user id in the completion body is ignored", "ID-2 the 500 path from onError still carries the identity cookie".
+
+What did not hold: nothing found so far. A new ADR is not needed.
