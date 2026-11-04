@@ -10,17 +10,36 @@ export default defineConfig(async () => {
     path.join(import.meta.dirname, "migrations/events"),
   );
   return {
-    plugins: [
-      cloudflareTest({
-        wrangler: { configPath: "./wrangler.jsonc" },
-        miniflare: {
-          bindings: {
-            TEST_FACTS_MIGRATIONS: factsMigrations,
-            TEST_EVENTS_MIGRATIONS: eventsMigrations,
+    test: {
+      projects: [
+        {
+          test: {
+            name: "unit",
+            include: ["tests/unit/**/*.test.ts"],
+            environment: "node",
           },
         },
-      }),
-    ],
-    test: { include: ["tests/**/*.test.ts"], setupFiles: ["./tests/setup.ts"] },
+        {
+          plugins: [
+            cloudflareTest({
+              wrangler: { configPath: "./wrangler.jsonc" },
+              miniflare: {
+                bindings: {
+                  TEST_FACTS_MIGRATIONS: factsMigrations,
+                  TEST_EVENTS_MIGRATIONS: eventsMigrations,
+                },
+              },
+            }),
+          ],
+          test: {
+            name: "integration",
+            include: ["tests/integration/**/*.test.ts"],
+            setupFiles: ["./tests/setup.ts"],
+            // Files run one after another: /__test/reset empties tables other files may share.
+            fileParallelism: false,
+          },
+        },
+      ],
+    },
   };
 });

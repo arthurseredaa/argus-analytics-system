@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "note": "Seed catalog from the spec: seven offers, all active. Test partners partnerA and partnerB.",
+  "partners": [
+    { "id": "partnerA", "name": "Partner A" },
+    { "id": "partnerB", "name": "Partner B" }
+  ],
+  "offers": [
+    {
+      "id": "001",
+      "partner_id": "partnerA",
+      "name": "Asia Women",
+      "ethnicity": "asia",
+      "genders": ["women"],
+      "epu": 0.8,
+      "url": "https://asia-women.example",
+      "kind": "specialised",
+      "active": true
+    },
+    {
+      "id": "002",
+      "partner_id": "partnerA",
+      "name": "Asia Men",
+      "ethnicity": "asia",
+      "genders": ["men"],
+      "epu": 0.65,
+      "url": "https://asia-men.example",
+      "kind": "specialised",
+      "active": true
+    },
+    {
+      "id": "003",
+      "partner_id": "partnerA",
+      "name": "Asia Connect",
+      "ethnicity": "asia",
+      "genders": ["women", "men"],
+      "epu": 0.95,
+      "url": "https://asia-connect.example",
+      "kind": "specialised",
+      "active": true
+    },
+    {
+      "id": "004",
+      "partner_id": "partnerB",
+      "name": "Europe Women",
+      "ethnicity": "europe",
+      "genders": ["women"],
+      "epu": 1.1,
+      "url": "https://europe-women.example",
+      "kind": "specialised",
+      "active": true
+    },
+    {
+      "id": "005",
+      "partner_id": "partnerB",
+      "name": "Europe Connect",
+      "ethnicity": "europe",
+      "genders": ["women", "men"],
+      "epu": 0.7,
+      "url": "https://europe-connect.example",
+      "kind": "specialised",
+      "active": true
+    },
+    {
+      "id": "006",
+      "partner_id": "partnerB",
+      "name": "Latin Men",
+      "ethnicity": "latam",
+      "genders": ["men"],
+      "epu": 0.6,
+      "url": "https://latin-men.example",
+      "kind": "specialised",
+      "active": true
+    },
+    {
+      "id": "007",
+      "partner_id": "partnerB",
+      "name": "Global Connect",
+      "ethnicity": "any",
+      "genders": ["women", "men"],
+      "epu": 0.5,
+      "url": "https://global-connect.example",
+      "kind": "universal",
+      "active": true
+    }
+  ]
+}
