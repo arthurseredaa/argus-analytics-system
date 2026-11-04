@@ -8,3 +8,4 @@ coverage/
 *.pdf
 CLAUDE.local.md
 .claude/settings.local.json
+worker-configuration.d.ts

@@ -1,0 +1,13 @@
+{
+  "name": "funnels-analytics-events",
+  "main": "src/index.ts",
+  // Capped by the newest date the workerd bundled with @cloudflare/vitest-plugin accepts.
+  "compatibility_date": "2026-11-03",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 },
+  },
+  "vars": { "GIT_SHA": "dev" },
+}
