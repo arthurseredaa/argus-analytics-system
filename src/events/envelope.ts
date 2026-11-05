@@ -15,10 +15,29 @@ export const SERVER_TYPES = [
 ] as const;
 export type ServerType = (typeof SERVER_TYPES)[number];
 
-const idPattern = /^[A-Za-z0-9_-]{1,64}$/;
+// One id pattern for visit ids and prelander ids; the flow loader checks prelander ids against it too.
+export const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const idPattern = ID_PATTERN;
 // One rule for a visit id: the envelope schema, the consumer and the completion route all use it.
 export const isValidVisitId = (value: string): boolean => idPattern.test(value);
 const typePattern = /^[a-z][a-z0-9_]{0,63}$/;
+
+// D1 refuses a payload nested about 1000 levels deep (json_valid), which would fail a whole batch,
+// so no event type or schema version gets past 32 levels. The payload object itself is level 1.
+export const MAX_PAYLOAD_DEPTH = 32;
+
+export function payloadDepth(value: unknown, limit = MAX_PAYLOAD_DEPTH + 1): number {
+  if (value === null || typeof value !== "object") return 0;
+  if (limit <= 1) return 1;
+  let deepest = 0;
+  for (const child of Object.values(value))
+    deepest = Math.max(deepest, payloadDepth(child, limit - 1));
+  return 1 + deepest;
+}
+
+const payloadSchema = z
+  .record(z.string(), z.unknown())
+  .refine((payload) => payloadDepth(payload) <= MAX_PAYLOAD_DEPTH);
 
 const envelopeSchema = z.strictObject({
   event_id: z.uuid(),
@@ -28,7 +47,7 @@ const envelopeSchema = z.strictObject({
   visit_id: z.string().regex(idPattern),
   seq: z.int().min(1).max(10_000),
   prelander_id: z.string().regex(idPattern),
-  payload: z.record(z.string(), z.unknown()),
+  payload: payloadSchema,
 });
 
 export type IncomingEvent = z.infer<typeof envelopeSchema>;
@@ -43,7 +62,7 @@ export const storedEventSchema = z.strictObject({
   visit_id: z.string().regex(idPattern),
   seq: z.int().min(1).max(10_000).nullable(),
   prelander_id: z.string().regex(idPattern),
-  payload: z.record(z.string(), z.unknown()),
+  payload: payloadSchema,
 });
 
 export type StoredEvent = z.infer<typeof storedEventSchema>;

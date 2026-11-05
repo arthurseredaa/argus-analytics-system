@@ -2,7 +2,7 @@ import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.ts";
 import { prelanderFlows } from "../../src/domain/prelanders.ts";
-import { browserEvent } from "../fixtures/event-bodies.ts";
+import { browserEvent, deepPayload } from "../fixtures/event-bodies.ts";
 import { captureQueue, deliver, eventsOf, failingQueue, postEvent } from "../fixtures/events.ts";
 import { newCookie } from "../fixtures/http.ts";
 
@@ -139,6 +139,16 @@ describe("POST /api/events", () => {
     );
     expect(res.status).toBe(413);
     expect(await res.json()).toEqual({ error: "too_large" });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("R-14 a deeply nested payload is rejected at the edge and nothing is sent", async () => {
+    const { queue, sent } = captureQueue();
+    const deep = deepPayload(1001);
+    const res = await postEvent(browserEvent({ type: "page_error", payload: deep }), newCookie(), {
+      EVENTS_QUEUE: queue,
+    });
+    expect(res.status).toBe(400);
     expect(sent).toHaveLength(0);
   });
 

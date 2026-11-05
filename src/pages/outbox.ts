@@ -5,6 +5,8 @@ export const OUTBOX_SCRIPT = `
 function createOutbox(opts) {
   var list = [];
   var inFlight = false;
+  var retryTimer = false;
+  var setTimer = opts.setTimer || (typeof setTimeout === "function" ? setTimeout : null);
 
   try {
     if (opts.storage) {
@@ -28,6 +30,17 @@ function createOutbox(opts) {
     return status >= 200 && status < 500 && status !== 408 && status !== 429;
   }
 
+  // Without this the outbox retries only on the next event, a reload or "online", so a 503 on the
+  // last event of a visit could wait for ever. One timer at a time, 30 seconds after a retryable outcome.
+  function retryLater() {
+    if (retryTimer || !setTimer) return;
+    retryTimer = true;
+    setTimer(function () {
+      retryTimer = false;
+      flush();
+    }, 30000);
+  }
+
   function flush() {
     if (inFlight || list.length === 0) return;
     var event = list[0];
@@ -41,7 +54,10 @@ function createOutbox(opts) {
     request.then(
       function (status) {
         inFlight = false;
-        if (!isFinal(status)) return;
+        if (!isFinal(status)) {
+          retryLater();
+          return;
+        }
         // The event may have been dropped by the cap while it was in flight.
         var at = list.indexOf(event);
         if (at !== -1) list.splice(at, 1);
@@ -50,6 +66,7 @@ function createOutbox(opts) {
       },
       function () {
         inFlight = false;
+        retryLater();
       }
     );
   }

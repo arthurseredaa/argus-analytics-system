@@ -55,6 +55,17 @@ describe("server events at entry and completion", () => {
     });
   });
 
+  it("ID-1 a HEAD request to the page emits no event", async () => {
+    const { queue, sent } = captureQueue();
+    const res = await call(
+      "/p/demo",
+      { method: "HEAD", cookie: newCookie() },
+      { EVENTS_QUEUE: queue },
+    );
+    expect(res.status).toBe(200);
+    expect(sent).toHaveLength(0);
+  });
+
   it("QZ-4 Q-26 each page load gets a new visit id", async () => {
     const cookie = newCookie();
     const { queue } = captureQueue();

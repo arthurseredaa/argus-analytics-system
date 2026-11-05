@@ -6,6 +6,12 @@ import { browserEvent } from "../fixtures/event-bodies.ts";
 const check = (raw: unknown) => checkIncoming(raw, prelanderFlows);
 const viewed = (step: number) =>
   check(browserEvent({ type: "step_viewed", payload: { step, prefilled: false } }));
+// An object nested `levels` deep; the object itself is level 1.
+const nest = (levels: number): Record<string, unknown> => {
+  let inner: Record<string, unknown> = {};
+  for (let i = 1; i < levels; i++) inner = { a: inner };
+  return inner;
+};
 const invalid = (fields: string[]) => ({ ok: false, error: "invalid_body", fields });
 
 describe("event envelope", () => {
@@ -116,5 +122,19 @@ describe("event envelope", () => {
       visit_id: "v1",
       prelander_id: "demo",
     });
+  });
+
+  it("R-14 a payload nested deeper than 32 levels is rejected", () => {
+    for (const schema_version of [1, 2]) {
+      const type = schema_version === 1 ? "step_viewed" : "page_error";
+      expect(check(browserEvent({ type, schema_version, payload: nest(33) }))).toEqual(
+        invalid(["payload"]),
+      );
+    }
+    expect(check(browserEvent({ type: "page_error", payload: nest(1001) }))).toEqual(
+      invalid(["payload"]),
+    );
+    expect(check(browserEvent({ type: "page_error", payload: nest(32) })).ok).toBe(true);
+    expect(check(browserEvent({ type: "page_error", payload: { list: [[[1]]] } })).ok).toBe(true);
   });
 });

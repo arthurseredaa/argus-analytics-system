@@ -26,9 +26,13 @@ export async function consumeEvents(batch: MessageBatch<unknown>, db: D1Database
       db,
       valid.map((v) => v.event),
     );
-  } catch {
-    console.log(JSON.stringify({ msg: "consumer_write_failed", count: valid.length }));
-    batch.retryAll();
+  } catch (err) {
+    // The class name only: an error message can quote the rows it failed on.
+    const name = err instanceof Error ? err.name : "unknown";
+    console.log(JSON.stringify({ msg: "consumer_write_failed", count: valid.length, name }));
+    // A fixed 60 second delay so a D1 hiccup does not burn all 10 retries at once.
+    // Stage 5 replaces this with the growing delays of ADR 0005.
+    batch.retryAll({ delaySeconds: 60 });
     return;
   }
 

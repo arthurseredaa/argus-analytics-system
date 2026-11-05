@@ -1,9 +1,13 @@
-import { env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { createExecutionContext, createMessageBatch, env, getQueueResult } from "cloudflare:test";
+import { describe, expect, it, vi } from "vitest";
+import { consumeEvents } from "../../src/events/consumer.ts";
 import { makeServerEvent, SERVER_TYPES } from "../../src/events/envelope.ts";
+import { deepPayload } from "../fixtures/event-bodies.ts";
 import { deliver, eventsOf, storedEvent } from "../fixtures/events.ts";
 
+// `prepare` is stubbed too: without it the mock failed with a TypeError before `batch` was reached.
 const failingDb = {
+  prepare: () => ({ bind: () => ({}) }),
   batch: () => Promise.reject(new Error("D1 is down")),
 } as unknown as D1Database;
 
@@ -94,10 +98,37 @@ describe("queue consumer", () => {
     expect(answers.results).toHaveLength(0);
   });
 
-  it("NFR-8 a D1 failure retries the whole batch", async () => {
-    const result = await deliver([storedEvent(), storedEvent()], failingDb);
+  it("NFR-8 a D1 failure retries the whole batch after 60 seconds", async () => {
+    const batch = createMessageBatch(
+      "events",
+      [storedEvent(), storedEvent()].map((body, i) => ({
+        id: `m${i}`,
+        timestamp: Date.now(),
+        attempts: 1,
+        body,
+      })),
+    );
+    // The plugin's retryAll() drops its argument, so the call itself is what the test checks.
+    const retryAll = vi.spyOn(batch, "retryAll");
+    await consumeEvents(batch, failingDb);
+    expect(retryAll).toHaveBeenCalledExactlyOnceWith({ delaySeconds: 60 });
+    const result = await getQueueResult(batch, createExecutionContext());
     expect(result.retryBatch.retry).toBe(true);
     expect(result.explicitAcks).toEqual([]);
+  });
+
+  it("NFR-8 a D1 failure logs the error class name and never its message", async () => {
+    const log = vi.spyOn(console, "log");
+    await deliver([storedEvent()], failingDb);
+    const lines = log.mock.calls.map((args) => String(args[0]));
+    const line = lines.find((l) => l.includes('"msg":"consumer_write_failed"'));
+    expect(JSON.parse(line ?? "{}")).toEqual({
+      msg: "consumer_write_failed",
+      count: 1,
+      name: "Error",
+    });
+    expect(lines.join("\n")).not.toContain("D1 is down");
+    log.mockRestore();
   });
 
   it("NFR-8 a malformed message is retried alone and the rest are stored", async () => {
@@ -109,6 +140,26 @@ describe("queue consumer", () => {
     ]);
     expect(await eventsOf(userId)).toHaveLength(2);
     // The plugin reports explicit retries as `retryMessages` ({ msgId }), not `explicitRetries`.
+    expect(result.retryMessages.map((m) => m.msgId)).toEqual(["m1"]);
+    expect(result.explicitAcks).toEqual(expect.arrayContaining(["m0", "m2"]));
+    expect(result.explicitAcks).not.toContain("m1");
+  });
+
+  it("NFR-8 a deeply nested message is retried alone and the rest of the batch is stored", async () => {
+    const userId = crypto.randomUUID();
+    const deep = deepPayload(1001);
+    const result = await deliver([
+      storedEvent({ user_id: userId, seq: 1 }),
+      storedEvent({
+        user_id: userId,
+        seq: 2,
+        type: "page_error",
+        schema_version: 2,
+        payload: deep,
+      }),
+      storedEvent({ user_id: userId, seq: 3 }),
+    ]);
+    expect(await eventsOf(userId)).toHaveLength(2);
     expect(result.retryMessages.map((m) => m.msgId)).toEqual(["m1"]);
     expect(result.explicitAcks).toEqual(expect.arrayContaining(["m0", "m2"]));
     expect(result.explicitAcks).not.toContain("m1");

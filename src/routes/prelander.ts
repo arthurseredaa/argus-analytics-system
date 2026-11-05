@@ -27,16 +27,19 @@ export function prelanderRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
     }
 
     const visitId = crypto.randomUUID();
-    emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [
-      makeServerEvent({
-        type: "prelander_viewed",
-        userId: c.get("userId"),
-        visitId,
-        prelanderId: id,
-        payload: { reason: "quiz" },
-        now: Date.now(),
-      }),
-    ]);
+    // Hono runs this handler for HEAD too; an uptime checker is not a funnel start.
+    if (c.req.method !== "HEAD") {
+      emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [
+        makeServerEvent({
+          type: "prelander_viewed",
+          userId: c.get("userId"),
+          visitId,
+          prelanderId: id,
+          payload: { reason: "quiz" },
+          now: Date.now(),
+        }),
+      ]);
+    }
 
     return c.body(renderQuizPage(flow, id, visitId), 200, {
       "content-type": "text/html; charset=utf-8",

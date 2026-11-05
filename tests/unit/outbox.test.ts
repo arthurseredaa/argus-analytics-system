@@ -8,6 +8,7 @@ type Opts = {
   send: (e: Evt) => Promise<number>;
   key: string;
   cap: number;
+  setTimer?: (fn: () => void, ms: number) => unknown;
 };
 
 // The script is plain browser JavaScript in a string, so the test evaluates it the way a page would.
@@ -152,5 +153,34 @@ describe("outbox", () => {
     box.enqueue(ev("a"));
     await tick();
     expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("NFR-4 a retryable failure schedules one retry after 30 seconds", async () => {
+    const timers: { fn: () => void; ms: number }[] = [];
+    const setTimer = (fn: () => void, ms: number) => void timers.push({ fn, ms });
+    const send = vi
+      .fn<(e: Evt) => Promise<number>>()
+      .mockResolvedValueOnce(503)
+      .mockResolvedValueOnce(503)
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValue(202);
+    const box = createOutbox({ storage: mapStorage(), send, key: KEY, cap: 100, setTimer });
+    box.enqueue(ev("a"));
+    await tick();
+    expect(timers.map((t) => t.ms)).toEqual([30_000]);
+    // A flush while the timer is pending does not schedule a second one.
+    box.flush();
+    await tick();
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(timers).toHaveLength(1);
+    // The timer fires, the send is rejected, and one new timer is scheduled.
+    timers[0]!.fn();
+    await tick();
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(timers.map((t) => t.ms)).toEqual([30_000, 30_000]);
+    timers[1]!.fn();
+    await tick();
+    expect(box.pending()).toEqual([]);
+    expect(timers).toHaveLength(2);
   });
 });

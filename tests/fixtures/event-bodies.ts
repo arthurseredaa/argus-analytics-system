@@ -13,3 +13,10 @@ export function browserEvent(overrides: Record<string, unknown> = {}): Record<st
     ...overrides,
   };
 }
+
+// A payload object nested `levels` deep (the object itself counts as level 1), built from nested
+// arrays so 1001 levels fit in about 2 KB of JSON, under the 4 KB body limit.
+export function deepPayload(levels: number): Record<string, unknown> {
+  const arrays = levels - 1;
+  return JSON.parse(`{"a":${"[".repeat(arrays)}${"]".repeat(arrays)}}`) as Record<string, unknown>;
+}
