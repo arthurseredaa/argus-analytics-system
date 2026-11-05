@@ -7,7 +7,7 @@ import { completeQuiz } from "../db/facts.ts";
 import { ConfigError, emailHash, encrypt, importAesKey, importHmacKey } from "../domain/crypto.ts";
 import { validateAnswers, type Flow } from "../domain/flow.ts";
 import { select } from "../domain/select.ts";
-import { makeServerEvent } from "../events/envelope.ts";
+import { isValidVisitId, makeServerEvent } from "../events/envelope.ts";
 import { emitInBackground } from "../events/producer.ts";
 
 const bodySchema = z.object({
@@ -99,7 +99,11 @@ export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
     const offer = read.catalog.offers.find((o) => o.id === selection.offerId);
     const base = {
       userId: c.get("userId"),
-      visitId: body.visit_id ?? crypto.randomUUID(),
+      // A malformed id would make a poison Queue message, so the Worker makes one instead.
+      visitId:
+        body.visit_id !== undefined && isValidVisitId(body.visit_id)
+          ? body.visit_id
+          : crypto.randomUUID(),
       prelanderId: body.prelander_id,
       now: Date.now(),
     };

@@ -112,6 +112,23 @@ describe("server events at entry and completion", () => {
     expect(sent[1]?.body.visit_id).toBe(sent[0]?.body.visit_id);
   });
 
+  it.each([
+    ["empty", ""],
+    ["65 characters", "a".repeat(65)],
+    ["an email", "user2@example.com"],
+  ])(
+    "QZ-4 an invalid visit id in the completion is replaced by one from the Worker (%s)",
+    async (_label, bad) => {
+      const { queue, sent } = captureQueue();
+      const res = await completion(newCookie(), { visit_id: bad }, queue);
+      expect(res.status).toBe(200);
+      expect(sent).toHaveLength(2);
+      expect(sent[0]?.body.visit_id).toMatch(UUID_V4);
+      expect(sent[1]?.body.visit_id).toBe(sent[0]?.body.visit_id);
+      expect(JSON.stringify(sent)).not.toContain("user2");
+    },
+  );
+
   it("QZ-4 a rejected completion emits nothing", async () => {
     const { queue, sent } = captureQueue();
     const res = await completion(newCookie(), { email: "not-an-email" }, queue);

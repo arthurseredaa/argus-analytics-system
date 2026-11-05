@@ -16,6 +16,8 @@ export const SERVER_TYPES = [
 export type ServerType = (typeof SERVER_TYPES)[number];
 
 const idPattern = /^[A-Za-z0-9_-]{1,64}$/;
+// One rule for a visit id: the envelope schema, the consumer and the completion route all use it.
+export const isValidVisitId = (value: string): boolean => idPattern.test(value);
 const typePattern = /^[a-z][a-z0-9_]{0,63}$/;
 
 const envelopeSchema = z.strictObject({
