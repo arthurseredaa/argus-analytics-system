@@ -6,6 +6,7 @@ import { completeRoute } from "./routes/complete.ts";
 import { eventsRoute } from "./routes/events.ts";
 import { goRoute } from "./routes/go.ts";
 import { identity } from "./routes/identity.ts";
+import { postbackRoute } from "./routes/postback.ts";
 import { prelanderRoute } from "./routes/prelander.ts";
 import { testRoute } from "./routes/test.ts";
 
@@ -29,6 +30,8 @@ export function createApp(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   app.route("/p", prelanderRoute(flows));
   app.route("/go", goRoute(flows));
   app.route("/__test", testRoute());
+  // No identity middleware: a partner server is not a user and gets no cookie (ADR 0007).
+  app.route("/postback", postbackRoute());
 
   // Names the error class only: a message can carry request data such as an email.
   app.onError((err, c) => {

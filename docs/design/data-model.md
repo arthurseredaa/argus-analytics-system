@@ -36,7 +36,7 @@ These points refine the ADRs. Where the wording differs, this file is the curren
 | `POST /api/events` | nothing | nothing | the one event in the body |
 | `POST /api/complete` | `conversions` joined with `clicks`, current `offers` | `users`, `user_answers` | `quiz_completed`, `offer_selected` (`completion`) |
 | `GET /go?prelander=&visit=` | `users`, `user_answers`, `conversions` joined with `clicks`, current `offers` | `clicks` when selection returns an offer | `offer_click` when a click is written |
-| `POST /postback/v1/{partner}` | `partners`, `clicks`, `offers` of the click's version | `conversions`, or `quarantine` | `lead` or `purchase` when accepted |
+| `POST /postback/v1/{partner}` | `partners`, `clicks`, `offers` of the click's version | `conversions`, or `quarantine` | `lead` or `purchase` when accepted or duplicate |
 | Cleanup job, daily | `users`, `clicks`, `conversions` | deletes from `users`, `user_answers`, `clicks` | none |
 
 Entry for a user with a cookie reads the facts in one D1 batch. A cookie without a `users` row (a user who left before completion) finds nothing and gets the quiz. An existing user without any Lead also gets an empty quiz (Q-1, ADR 0004). A user whose Leads are all for disabled offers and whose answers are sufficient skips the quiz under rule 3 (OFF-9), so entry can redirect with reason `best_epu` or `fallback_universal` as well as `lead_return`.
@@ -344,10 +344,10 @@ Every event has the same envelope (ADR 0005). One event per request (Arthur's de
 | `quiz_completed` | server, `POST /api/complete` | `answers` object, no email | visit; the current answers in BigQuery |
 | `offer_selected` | server | `offer_id` (null for `no_offer`), `reason` (`lead_return`, `best_epu`, `fallback_universal`, `no_offer`), `moment` (`entry`, `completion`), `catalog_version` | offer, catalog version (P-3) |
 | `offer_click` | server, `GET /go` or the entry redirect | `click_id`, `offer_id`, `catalog_version`, `reason` | click, offer, prelander |
-| `lead` | server, accepted postback | `click_id`, `offer_id`, `partner_id`, `transaction_id`, `occurred_at`, `payout`, `currency` | click, and through it the user, offer and prelander (PB-4, Q-22) |
-| `purchase` | server, accepted postback | same as `lead` | same |
+| `lead` | server, accepted or duplicate postback | `click_id`, `offer_id`, `partner_id`, `transaction_id`, `occurred_at`, `payout`, `currency` | click, and through it the user, offer and prelander (PB-4, Q-22) |
+| `purchase` | server, accepted or duplicate postback | same as `lead` | same |
 
-Step 3 has no browser answer event; finishing it is `quiz_completed`. `lead` and `purchase` are not emitted for quarantined or duplicate postbacks. `offer_selected` is emitted only when selection returns an offer or `no_offer`; an entry that shows the quiz emits `prelander_viewed` alone. `offer_click.reason` is the click's reason, added so BigQuery can tell a Lead return transition from a first one without reading D1.
+Step 3 has no browser answer event; finishing it is `quiz_completed`. A duplicate postback sends its `lead` or `purchase` again with the same EventID, derived from `(partner_id, type, transaction_id)`. If the Queue refused the first send, the endpoint answered `503`, and the partner's retry is how the event reaches analytics; the events table keeps one row per EventID (ADR 0007). A quarantined postback sends nothing. `offer_selected` is emitted only when selection returns an offer or `no_offer`; an entry that shows the quiz emits `prelander_viewed` alone. `offer_click.reason` is the click's reason, added so BigQuery can tell a Lead return transition from a first one without reading D1.
 
 ### The nine events of a visit
 
@@ -376,7 +376,7 @@ Synthetic data: user `U1` with email `u1@example.com`, prelander `P1`, catalog v
 | 3 | 10:01:30. `POST /api/complete` | write `U1`, `email_enc`, `email_hash`, `created_at` = `last_completed_at` = 10:01:30 | write (`U1`, `gender`, `"women"`, 10:01:30), (`U1`, `ethnicity`, `"asia"`, 10:01:30) | read: no Leads | read: none | read version 1 | none | none | `quiz_completed` (answers), `offer_selected` (003, `best_epu`, `completion`, 1) |
 | 4 | 10:01:40. `GET /go?prelander=P1&visit=V1`, 302 to `https://asia-connect.example/?click_id=c_8f3a` | read `U1` | read `gender`, `ethnicity` | read: no Leads; write `c_8f3a` (`U1`, 003, 1, `P1`, V1, `best_epu`, 10:01:40) | read: none | read version 1: 003 selected again | none | none | `offer_click` (`c_8f3a`, 003, 1, `best_epu`) |
 | 5 | 14:00:05. `partnerA` sends a Lead, `T-123`, `c_8f3a` (DEMO-3), answer 202 | none | none | read `c_8f3a` | write #1 (`partnerA`, `lead`, `T-123`, `c_8f3a`, occurred 14:00:00, accepted 14:00:05) | read (1, 003): `partner_id` = `partnerA` (Q-24) | read `partnerA` secret | none | `lead` (`c_8f3a`, 003, `partnerA`, `T-123`) |
-| 6 | 14:03. The same postback again (DEMO-6), answer 200 `duplicate` | none | none | read `c_8f3a` | conflict on (`partnerA`, `lead`, `T-123`), nothing written | read (1, 003) | read `partnerA` | none | none |
+| 6 | 14:03. The same postback again (DEMO-6), answer 200 `duplicate` | none | none | read `c_8f3a` | conflict on (`partnerA`, `lead`, `T-123`), nothing written | read (1, 003) | read `partnerA` | none | `lead` again with the EventID of step 5; the events table keeps one row |
 | 7 | Day 2 09:00. `GET /p/P1` with the `U1` cookie (DEMO-4), 302 to `https://asia-connect.example/?click_id=c_91bb` | read `U1` | read `gender`, `ethnicity` | read `c_8f3a` through the Lead; write `c_91bb` (`U1`, 003, 1, `P1`, V2, `lead_return`, 09:00) | read #1, Lead on 003 accepted 14:00:05 | read version 1: 003 active | none | none | `prelander_viewed` (`lead_return`, visit V2), `offer_selected` (003, `lead_return`, `entry`, 1), `offer_click` (`c_91bb`, 003, 1, `lead_return`) |
 | 8 | 09:30. `partnerA` sends a Purchase, `T-124`, `c_91bb`, payout 25.00 USD (DEMO-5), answer 202 | none | none | read `c_91bb` | write #2 (`partnerA`, `purchase`, `T-124`, `c_91bb`, payout 25.00, `USD`) | read (1, 003) | read `partnerA` | none | `purchase` (`c_91bb`, 003, `partnerA`, `T-124`, 25.00, `USD`) |
 | 9 | Reviewer opens the report (DEMO-5, AN-6) | none | none | read, for prelander and offer | read #1 and #2 | none | none | none | none (the report reads the MVP events database for the funnel) |

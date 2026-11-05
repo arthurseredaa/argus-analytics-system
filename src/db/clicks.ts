@@ -29,3 +29,48 @@ export async function insertClick(db: D1Database, click: Click): Promise<void> {
     )
     .run();
 }
+
+export type PostbackClick = {
+  clickId: string;
+  userId: string | null;
+  offerId: string;
+  catalogVersion: number;
+  prelanderId: string;
+  visitId: string;
+  offerPartnerId: string;
+};
+
+// The click a postback names, with the partner of its offer in the catalog version it was made
+// under, so a later catalog change cannot move a click to another partner (Q-24).
+export async function findClickForPostback(
+  db: D1Database,
+  clickId: string,
+): Promise<PostbackClick | null> {
+  const row = await db
+    .prepare(
+      `SELECT c.click_id, c.user_id, c.offer_id, c.catalog_version, c.prelander_id, c.visit_id,
+              o.partner_id
+       FROM clicks c JOIN offers o ON o.version = c.catalog_version AND o.id = c.offer_id
+       WHERE c.click_id = ?1`,
+    )
+    .bind(clickId)
+    .first<{
+      click_id: string;
+      user_id: string | null;
+      offer_id: string;
+      catalog_version: number;
+      prelander_id: string;
+      visit_id: string;
+      partner_id: string;
+    }>();
+  if (row === null) return null;
+  return {
+    clickId: row.click_id,
+    userId: row.user_id,
+    offerId: row.offer_id,
+    catalogVersion: row.catalog_version,
+    prelanderId: row.prelander_id,
+    visitId: row.visit_id,
+    offerPartnerId: row.partner_id,
+  };
+}
