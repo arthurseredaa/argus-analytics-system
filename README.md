@@ -23,17 +23,20 @@ curl http://localhost:8787/healthz
 pnpm check
 ```
 
-`pnpm check` runs everything CI runs: typecheck, lint, format check, docs lint and tests. `pnpm typecheck` generates `worker-configuration.d.ts` first, so it works on a fresh checkout.
+`pnpm check` runs what the CI `check` job runs: typecheck, lint, format check, docs lint and tests. `pnpm typecheck` generates `worker-configuration.d.ts` first, so it works on a fresh checkout.
+
+`pnpm install` wires `pnpm check` as the git pre-commit hook. `git commit --no-verify` skips it and is not used in this repository.
+
+The browser test needs Chromium, installed once, and a free port 8787:
 
 ```sh
+pnpm exec playwright install chromium
 pnpm migrate:local
 pnpm seed --local
 pnpm test:browser
 ```
 
-`pnpm test:browser` starts `wrangler dev` and drives the quiz in Chromium. It needs the local databases migrated and seeded and a `.dev.vars` copied from the example. It proves that the page's own JavaScript sends the eight events and that the email reaches only the completion request; the local state and the wrangler log are then scanned for it.
-
-`pnpm install` wires `pnpm check` as the git pre-commit hook. `git commit --no-verify` skips it and is not used in this repository.
+`pnpm test:browser` starts `wrangler dev` and drives the quiz in Chromium. It also needs a `.dev.vars` copied from the example. It proves that the page's own JavaScript sends the eight events and that the email reaches only the completion request; the local state and the wrangler log are then scanned for it.
 
 ## Deploy
 
