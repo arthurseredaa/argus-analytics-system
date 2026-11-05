@@ -1,5 +1,6 @@
 // The Hono app: healthz, the identity middleware and the routes.
-// Implements ADR 0002 (identity before every page and API route); serves ID-2, R-12, DLV-1.
+// Implements ADR 0002 (identity before the pages, `/go` and the two browser APIs; the report and
+// postbacks have none); serves ID-2, R-12, DLV-1.
 import { Hono } from "hono";
 import type { Flow } from "./domain/flow.ts";
 import { completeRoute } from "./routes/complete.ts";

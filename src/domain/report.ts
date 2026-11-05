@@ -199,7 +199,7 @@ function sortedPayouts(cells: readonly PayoutCell[]): Payout[] {
   const byCurrency = new Map<string | null, number>();
   for (const c of cells) byCurrency.set(c.currency, (byCurrency.get(c.currency) ?? 0) + c.amount);
   return [...byCurrency]
-    .map(([currency, amount]) => ({ currency, amount }))
+    .map(([currency, amount]) => ({ currency, amount: Math.round(amount * 10_000) / 10_000 }))
     .toSorted((a, b) => currencyOrder(a.currency, b.currency));
 }
 

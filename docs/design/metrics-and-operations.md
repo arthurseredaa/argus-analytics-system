@@ -43,7 +43,7 @@ Rules that apply to every row:
 | M-12 | Lead returns | distinct `visit_id` of `prelander_viewed` where `reason` = `lead_return` | none, a count | prelander, day | every visit counts | `prelander_viewed` |
 | M-13 | Leads | distinct (`user_id`, `offer_id`) with an accepted Lead. The first accepted Lead of the pair carries the count, with its click's prelander and date | none, a count | prelander, offer, day | one per user per offer, ever (Q-23); a second Lead for the pair is stored and not counted. A Lead whose click lost its user to a deletion request counts once per click | `conversions` joined with `clicks`; `lead` events |
 | M-14 | Purchases | every accepted Purchase, distinct (`partner_id`, `transaction_id`) | none, a count | prelander, offer, day | every Purchase counts, a second real Purchase included (PB-5) | `conversions` joined with `clicks`; `purchase` events |
-| M-15 | Purchases without a Lead | M-14 rows with no Lead for the same user and offer | none, a count | prelander, offer, day | a flag; these Purchases stay in M-14 (Q-8); no Lead accepted at or before the Purchase, so a Lead that arrives later does not clear the flag and a closed day never changes | `conversions` joined with `clicks` |
+| M-15 | Purchases without a Lead | M-14 rows with no Lead for the same user and offer | none, a count | prelander, offer, day | a flag; these Purchases stay in M-14 (Q-8); no Lead accepted at or before the Purchase, so a Lead that arrives later does not clear the flag. A deletion request changes this: the user's clicks then count one per click, so a Purchase whose Lead sat on another click of the user can flip to "without a Lead" | `conversions` joined with `clicks` |
 | M-16 | Payout received | sum of `payout` of accepted Leads and Purchases, per `currency` | none, a sum | prelander, offer, day | each accepted postback adds its payout, including a second Lead for the same pair, because the partner paid for it | `conversions`; `lead` and `purchase` events |
 
 ### Answers
@@ -93,7 +93,7 @@ A postback can arrive hours or days after the click (R-7). One report cannot bot
 - Keyed by `accepted_day`, the UTC date of `conversions.accepted_at`, our own receive time.
 - Sort key columns: `accepted_day`, `prelander_id`, `offer_id`.
 - Shows M-13 (on the day the pair's first Lead was accepted), M-14, M-15 and M-16: what came in during the period.
-- A period's numbers do not change once it has ended, because `accepted_at` is written once by us and later postbacks land on later days.
+- A period's numbers do not change once it has ended, because `accepted_at` is written once by us and later postbacks land on later days. The one exception is a deletion request: it sets `clicks.user_id` to null on the user's clicks, and each such click then counts as its own user (M-13). A second Lead of the pair that was stored and not counted then counts, and a Purchase can become "without a Lead" (M-15), on days that have already ended.
 
 ### Worked example
 
@@ -119,7 +119,7 @@ Both views count the same 8 Leads. They place them on different days.
 
 ### Which view to read
 
-A marketer comparing funnels reads the cohort view: it answers which prelander and which offer turn clicks into Leads, because every Lead sits on the day of the click that earned it. A finance person reads the postback view: it answers what came in during a period, and a closed period never changes. Yesterday's numbers in the cohort view can change today because the partner reports a registration when it happens on their side, which can be days after our click; the "as of" time on the page says how complete the row is.
+A marketer comparing funnels reads the cohort view: it answers which prelander and which offer turn clicks into Leads, because every Lead sits on the day of the click that earned it. A finance person reads the postback view: it answers what came in during a period, and a closed period does not change, except when a deletion request removes a user (M-13, M-15). Yesterday's numbers in the cohort view can change today because the partner reports a registration when it happens on their side, which can be days after our click; the "as of" time on the page says how complete the row is.
 
 ## Latency target (NFR-6)
 

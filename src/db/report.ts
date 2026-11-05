@@ -35,6 +35,11 @@ const clickFilters = `(?3 IS NULL OR c.prelander_id = ?3) AND (?4 IS NULL OR c.o
 // Decision 2: a click whose user was deleted counts as its own user.
 const USER_KEY = `COALESCE(c.user_id, 'click:' || c.click_id)`;
 
+// Planner hints (R-17). `CROSS JOIN ... ON` fixes the join order: the left table is the outer loop,
+// so the filtered side drives the lookup. It is not a cartesian product; do not "simplify" it to
+// JOIN. `INDEXED BY conversions_click` pins the index on conversions(click_id, ...), so a renamed
+// index becomes a prepare-time error instead of a silent full scan.
+//
 // Decision 3 (Q-23): the Lead `l` on click `c` is the first accepted Lead of its (user, offer)
 // pair, ordered by accepted_at, then conversions.id. A click without a user is its own pair.
 const NO_EARLIER_LEAD = `
@@ -99,7 +104,7 @@ ${GROUP_BY[grain]}`,
 
 const NEWEST_EVENT = statement(
   "events",
-  "M-1, M-3, M-8: the newest received_at, the freshness printed next to the as-of time",
+  "freshness: the newest received_at, printed next to the as-of time (no metric id)",
   "SELECT MAX(received_at) AS newest_at FROM events",
 );
 
@@ -128,7 +133,7 @@ function leads(view: "cohort" | "postback", grain: Grain): ReportStatement {
   const cohort = view === "cohort";
   return statement(
     "facts",
-    `M-13: Leads (first accepted Lead per user and offer), users with a Lead and Leads with a Purchase, by ${grain}, ${view} view`,
+    `M-13, M-26, M-27: Leads (first accepted Lead per user and offer), Leads with a Purchase and users with a Lead, by ${grain}, ${view} view`,
     `WITH base AS (
   SELECT ${dayOf(cohort ? "c.created_at" : "l.accepted_at")} AS day, c.prelander_id AS prelander_id,
          c.offer_id AS offer_id, ${USER_KEY} AS ukey,
@@ -208,7 +213,7 @@ export const REPORT_SQL: Readonly<Record<string, ReportStatement>> = Object.from
   ...byGrain(cohortClicks, "cohort_clicks"),
   ...byGrain((grain) => leads("cohort", grain), "cohort_leads"),
   ["cohort_purchases_offer", purchases("cohort")],
-  ...byGrain((grain) => leads("postback", grain), "postback_leads"),
+  ["postback_leads_offer", leads("postback", "offer")],
   ["postback_purchases_offer", purchases("postback")],
   ["postback_payouts_offer", POSTBACK_PAYOUTS],
 ]);

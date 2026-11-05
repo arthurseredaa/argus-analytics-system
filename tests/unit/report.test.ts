@@ -352,6 +352,16 @@ describe("report arithmetic", () => {
     });
   });
 
+  it("AN-5 payout totals carry no float noise", () => {
+    const report = buildReport(
+      input({
+        query: { ...baseQuery, view: "postback" },
+        payouts: [payout("003", "USD", 0.1), payout("004", "USD", 0.2)],
+      }),
+    ) as PostbackReport;
+    expect(report.payout).toEqual([{ currency: "USD", amount: 0.3 }]);
+  });
+
   it("AN-5 payouts sort by currency with null last", () => {
     const report = buildReport(
       input({

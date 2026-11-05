@@ -74,6 +74,14 @@ expect_report() { # expect_report <step> <jq filter> <expected> [seconds]: polls
 JAR="$TMP/demo.jar"
 FINAL_FIELDS='.visits,.started,.step_1,.step_2,.step_3,.completed,.went_to_offer,.transitions,.lead,.purchase'
 
+# A remote run signs its postbacks with .dev.vars.remote. Check it before the reset, so a missing
+# file cannot leave the deployed store empty with the scenario stopped half way.
+base_host="${BASE#*://}"
+base_host="${base_host%%[/:]*}"
+if [ "$base_host" != "localhost" ] && [ "$base_host" != "127.0.0.1" ] && [ ! -f .dev.vars.remote ]; then
+  fail "preflight" ".dev.vars.remote for the postbacks to $BASE" "no such file"
+fi
+
 check "reset" '{"ok":true}' "$(curl -s -X POST "$BASE/__test/reset" | jq -c .)"
 
 # DEMO-2: new user, quiz, offer
@@ -85,20 +93,23 @@ check "DEMO-2 ethnicity answered 202" 202 "$(answer "$JAR" ethnicity asia 4)"
 check "DEMO-2 step 3 viewed 202" 202 "$(viewstep "$JAR" 3 5)"
 check "DEMO-2 complete gives 003 best_epu" '{"offer_id":"003","reason":"best_epu"}' \
   "$(complete "$JAR" women asia user1@example.com | jq -c '{offer_id,reason}')"
-go="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/go?prelander=demo")"
+go="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/go?prelander=demo")" ||
+  fail "DEMO-2 go" "a 302 line" "curl exited $?"
 check "DEMO-2 go 302" 302 "${go%% *}"
 CLICK="${go##*click_id=}"
 check_match "DEMO-2 go click id is 32 hex" '^[0-9a-f]{32}$' "$CLICK"
 expect_report "DEMO-2 report" '[.visits,.started,.step_2,.step_3,.completed]|@csv' '1,1,1,1,1'
 
 # DEMO-3: Lead for that click
-lead="$(pnpm -s postback lead --click "$CLICK" --txn DEMO-L1 --base "$BASE")"
+lead="$(pnpm -s postback lead --click "$CLICK" --txn DEMO-L1 --base "$BASE")" ||
+  fail "DEMO-3 lead" "a postback answer" "postback exited $?"
 echo "$lead"
 check_match "DEMO-3 lead accepted" '^202' "$lead"
 expect_report "DEMO-3 report lead 1" '.lead' 1
 
 # DEMO-4: return without the quiz
-back="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/p/demo")"
+back="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/p/demo")" ||
+  fail "DEMO-4 return" "a 302 line" "curl exited $?"
 echo "$back"
 check_match "DEMO-4 return redirects to the offer" '^302 https://asia-connect\.example/\?click_id=[0-9a-f]{32}$' "$back"
 if [ "${back##*click_id=}" = "$CLICK" ]; then fail "DEMO-4 return gets a new click id" "an id other than $CLICK" "${back##*click_id=}"; fi
@@ -107,7 +118,8 @@ expect_report "DEMO-4 report visits 2" '.visits' 2
 
 # DEMO-5: Purchase, report changes
 report >"$TMP/before.json"
-purchase="$(pnpm -s postback purchase --click "$CLICK" --txn DEMO-P1 --base "$BASE")"
+purchase="$(pnpm -s postback purchase --click "$CLICK" --txn DEMO-P1 --base "$BASE")" ||
+  fail "DEMO-5 purchase" "a postback answer" "postback exited $?"
 echo "$purchase"
 check_match "DEMO-5 purchase accepted" '^202' "$purchase"
 report >"$TMP/after.json"
@@ -123,10 +135,12 @@ page="$(curl -s "$BASE/report" | grep -o 'data-metric="purchase">[0-9]*<' | head
 check "DEMO-5 /report shows the Purchase" 'data-metric="purchase">1<' "$page"
 
 # DEMO-6: the same postbacks again
-again="$(pnpm -s postback purchase --click "$CLICK" --txn DEMO-P1 --base "$BASE")"
+again="$(pnpm -s postback purchase --click "$CLICK" --txn DEMO-P1 --base "$BASE")" ||
+  fail "DEMO-6 purchase again" "a postback answer" "postback exited $?"
 echo "$again"
 check "DEMO-6 purchase again is a duplicate" '200 {"status":"duplicate"}' "$again"
-lead_again="$(pnpm -s postback lead --click "$CLICK" --txn DEMO-L1 --base "$BASE")"
+lead_again="$(pnpm -s postback lead --click "$CLICK" --txn DEMO-L1 --base "$BASE")" ||
+  fail "DEMO-6 lead again" "a postback answer" "postback exited $?"
 echo "$lead_again"
 check_match "DEMO-6 lead again answers 200" '^200' "$lead_again"
 counts="$(report | jq -c '{lead,purchase}')"
