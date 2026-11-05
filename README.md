@@ -20,13 +20,12 @@ curl http://localhost:8787/healthz
 ## Check
 
 ```sh
-pnpm typecheck
-pnpm lint
-pnpm fmt:check
-pnpm test
+pnpm check
 ```
 
-`pnpm typecheck` generates `worker-configuration.d.ts` first, so it works on a fresh checkout.
+`pnpm check` runs everything CI runs: typecheck, lint, format check, docs lint and tests. `pnpm typecheck` generates `worker-configuration.d.ts` first, so it works on a fresh checkout.
+
+`pnpm install` wires `pnpm check` as the git pre-commit hook. `git commit --no-verify` skips it and is not used in this repository.
 
 ## Deploy
 

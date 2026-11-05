@@ -1,6 +1,6 @@
 # NNNN. Title in the form of a short decision
 
-- Status: proposed | accepted | superseded by [NNNN](NNNN-file.md)
+- Status: proposed | accepted | superseded by NNNN (link the new file)
 - Date: YYYY-MM-DD
 - Relates to: R-/Q-/A- ids from `docs/requirements/`
 
