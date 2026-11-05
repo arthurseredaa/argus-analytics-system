@@ -37,5 +37,18 @@
         ]
       }
     ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm check)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test -t *)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm lint:docs)",
+      "Bash(pnpm fmt:check)",
+      "Bash(pnpm state:check)",
+      "Bash(herdr agent list)"
+    ]
   }
 }
