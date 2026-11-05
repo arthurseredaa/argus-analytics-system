@@ -41,3 +41,4 @@ The spec asks for the agent instructions (this file), the initial plan, signific
 - Do not claim something works without showing the command output that proves it.
 - Ambiguities in the spec go to `docs/requirements/open-questions.md` before implementation. Do not settle them silently in code.
 - Email addresses never go into URLs or logs. Tests and fixtures use synthetic `@example.com` addresses only.
+- Every prompt to a subagent starts with: read `docs/plans/_subagent-brief.md` first. The task brief and the stage plan come after it.
