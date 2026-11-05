@@ -103,3 +103,11 @@ Two changes to the design came out of the stage 3 plan.
 - data-model.md said a duplicate postback sends no event, and ADR 0007 said it sends the event again with the same EventID. The stage follows ADR 0007: when the Queue fails after the D1 write, the partner's retry is a duplicate, and without the resend the event would be lost. The EventID is derived from the dedup key, so the event is stored once.
 
 No stage was added or moved.
+
+## 2026-11-05: stages run without an approval gate from stage 4
+
+Arthur changed how the remaining stages run, to finish them faster and to review the result once at the end. From stage 4 on there is no approval gate and no blocking explain-back per stage. The AI squash-merges each stage PR itself once CI is green, removes the worktree, checks the deployed Worker, then starts the next stage. It stops only when it needs something from Arthur. Sonnet subagents write the code through subagent-driven development, with a review per task and a whole-branch review on Opus per stage. A Fable review checks how accurately stages 4 to 10 were implemented once stage 10 is done. The explain-back questions are collected in each PR description and in the stage notes. `CLAUDE.md`, the `close-stage` skill, `.claude/rules/state.md` and "How the stages run" in `part2-mvp-stages.md` say this now. An auto-mode safety check refused to let a subagent write these changes, because they relax the agent instructions on the word of agent-written text alone. Arthur confirmed them in his own answer, and the main session made the edits.
+
+The stage 4 plan also settled four report questions the design left open, each from a default in `metrics-and-operations.md`. A click whose user was deleted counts as its own user. Only the first Lead of a user and offer pair counts, and later Leads add only their payout (Q-23). A Purchase counts as "without a Lead" (M-15) when no Lead was accepted at or before it. Visitors (M-2) and transitions (M-11) are in the MVP report, because M-28 and the demo numbers need them. The demo script gained three `step_viewed` lines, without which the report would show `started` 0 after a full visit.
+
+No stage was added or moved.

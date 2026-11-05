@@ -53,13 +53,13 @@ load/                 k6 scripts (stage 9)
 The loop from Part 1, adapted for code:
 
 1. Read. The stage names what to read before any code.
-2. Decide. Arthur's decisions go through AskUserQuestion with one option recommended. A spec ambiguity found while coding goes into [open-questions.md](../requirements/open-questions.md) with a default before code settles it.
-3. Write tests and code together with the test-driven-development skill: the failing test first. Its name says what is checked in plain words and starts with the requirement id, as acceptance-checks.md requires (`OFF-5 row 1 women+asia gives 003`): the words tell a person what broke, the id lets `pnpm test -- -t "OFF-5"` run one requirement and ties the test to its card. Arthur reads the diff.
-4. Explain back. Arthur says in Ukrainian what one request does in the new code: route, function, table or binding. The AI points at every difference from the code. The stage is not done until they match.
+2. Decide. Arthur's decisions go through AskUserQuestion with one option recommended. A spec ambiguity found while coding goes into [open-questions.md](../requirements/open-questions.md) with a default before code settles it. From stage 4 on, a choice the docs give a default for is made by the AI and recorded in the stage plan; only a decision with no default in the docs stops the stage.
+3. Write tests and code together with the test-driven-development skill: the failing test first. Its name says what is checked in plain words and starts with the requirement id, as acceptance-checks.md requires (`OFF-5 row 1 women+asia gives 003`): the words tell a person what broke, the id lets `pnpm test -t "OFF-5"` run one requirement and ties the test to its card. From stage 4 on, Sonnet subagents write the code through subagent-driven development, each task is reviewed on its own, and the whole branch is reviewed on Opus before the merge.
+4. Explain back. Arthur says in Ukrainian what one request does in the new code: route, function, table or binding. The AI points at every difference from the code. Up to stage 3 the stage was not done until they matched; from stage 4 on the questions are collected in the PR description and the stage notes and do not block the merge.
 5. Verify. Run the acceptance cards the stage names, then the regression gate, and paste both outputs. Checks against Cloudflare use `BASE` set to the deployed workers.dev URL; curl never gets `-L`.
-6. Approve, commit, push. One commit per stage, after Arthur's approval. A push to `main` deploys, so a stage is closed only when that CI run is green and `GET /healthz` shows the new commit. [progress.json](../state/progress.json) changes in the same commit. `BASE` in a stage's checks is the deployed workers.dev URL, the same one the README gives as the demo link.
+6. Merge. One squash-merged commit per stage. Up to stage 3 it waited for Arthur's approval; from stage 4 on the AI merges the PR once CI is green, removes the worktree, pulls `main`, waits for the deploy run and checks the deployed Worker, then starts the next stage. A push to `main` deploys, so a stage is closed only when that CI run is green and `GET /healthz` shows the new commit. [progress.json](../state/progress.json) changes in the same commit. `BASE` in a stage's checks is the deployed workers.dev URL, the same one the README gives as the demo link.
 
-One stage per session unless Arthur says otherwise.
+From stage 4 on the stages run back to back. Once stage 10 is done, a Fable review checks stages 4 to 10 against their plans.
 
 Every closing commit also updates the table "What to show at the review" at the end of this file, so the review walk-through grows with the code instead of being reconstructed at the end.
 
@@ -207,7 +207,7 @@ Estimate: 2.5 hours.
 
 Goal: the report counts what the system recorded, in the cohort and postback views, and the slice runs end to end on Cloudflare. AN-1 to AN-8, TEST-5, DEMO-5, DEMO-7, R-17, MVP-1, MVP-4.
 
-Files: `src/routes/report.ts`, `src/report/queries.ts`, `src/pages/report.ts`, `migrations/events/0002_report_indexes.sql` if needed, `tests/report.test.ts`, `tests/fixtures/report.ts`, `scripts/demo.sh` behind `pnpm test:e2e`, the README expected-results table.
+Files: `src/domain/report.ts`, `src/db/report.ts`, `src/routes/report.ts`, `src/pages/report.ts`, `migrations/events/0002_report_indexes.sql`, `migrations/facts/0002_report_indexes.sql`, `scripts/demo.sh` behind `pnpm test:e2e`, `scripts/lib/dev-server.sh`, `tests/fixtures/report.ts`, the report tests in `tests/unit/` and `tests/integration/`, the README "Expected results" section.
 
 Read first: [metrics-and-operations.md](../design/metrics-and-operations.md), "Metric definitions", "What the MVP report shows", "Two report views"; cards AN-1 to AN-8, TEST-5, DEMO-5, MVP-1.
 
@@ -218,10 +218,10 @@ Content:
 - DEMO-7 table: the report after each demo step, ending at started 1, steps 1 to 3 at 1, transitions 2, unique users sent to an offer 1, Lead 1, Purchase 1, as in acceptance-checks.md.
 
 Steps:
-- [ ] The automated cases of AN-1 to AN-8, R-17 and DEMO-5; then the queries and the page.
-- [ ] Explain back: Arthur says why yesterday's cohort row can change today and which view finance should read.
-- [ ] Verify: `pnpm test -- -t "AN-1|AN-5|AN-7"` (TEST-5) passes against the fixture table; against `BASE`, the report saved with `jq -S .` before and after the DEMO-5 Purchase differs, by `diff`, only in the cells the DEMO-7 table lists; after DEMO-6, `jq '{lead,purchase}'` prints `{"lead":1,"purchase":1}`; `pnpm test:e2e --base $BASE` passes (MVP-1); `grep -rni bigquery src/ wrangler.jsonc` prints nothing (MVP-4); the gate passes.
-- [ ] Approval, commit `feat: funnel report in cohort and postback views`, push.
+- [x] The automated cases of AN-1 to AN-8, R-17 and DEMO-5; then the queries and the page.
+- [x] Explain back: Arthur says why yesterday's cohort row can change today and which view finance should read.
+- [x] Verify: `pnpm test -- -t "AN-1|AN-5|AN-7"` (TEST-5) passes against the fixture table; against `BASE`, the report saved with `jq -S .` before and after the DEMO-5 Purchase differs, by `diff`, only in the cells the DEMO-7 table lists; after DEMO-6, `jq '{lead,purchase}'` prints `{"lead":1,"purchase":1}`; `pnpm test:e2e --base $BASE` passes (MVP-1); `grep -rni bigquery src/ wrangler.jsonc` prints nothing (MVP-4); the gate passes.
+- [x] Approval, commit `feat: funnel report in cohort and postback views`, push.
 
 The slice is complete here.
 
@@ -375,6 +375,7 @@ The list Arthur walks through at the review, so nothing built is forgotten. Each
 | Every step sends one event; the same event twice is stored once | `__test/state` after the visit; resend one event | 2 |
 | The Lead postback, the return without the quiz, the repeated postback that changes nothing | `pnpm postback`, `/p/demo` again, `pnpm postback` again | 3 |
 | The report in two views and the Purchase moving the numbers | `/report`, then a Purchase postback, then `/report` again | 4 |
+| The whole demo as one command, every answer and report cell checked | `pnpm test:e2e --base $BASE` | 4 |
 | An offer turned off without a deploy and `/go` re-selecting | `pnpm offer set-status 003 inactive`, then `/go?prelander=demo` | 3 |
 | A postback that is unsigned, stale or for another partner's click changes nothing; an unknown click waits in quarantine | `pnpm test -t "PB-3\|PB-4\|PB-8"`, then `counts.quarantine` in `__test/state` | 3 |
 | The event path: Queue, files in R2, the loader, and what the loader-paused drill showed | `__test/health`, the R2 bucket, the drill numbers from the stage 5 verify | 5 |
