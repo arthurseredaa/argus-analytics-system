@@ -131,6 +131,23 @@ export function checkIncoming(raw: unknown, flows: ReadonlyMap<string, Flow>): C
   return { ok: true, event };
 }
 
+// A UUID derived from SHA-256 of the parts, so the same postback always gets the same EventID
+// (ADR 0007, PB-5). The first 16 bytes become a UUID with version nibble 8 and variant bits 10.
+export async function derivedEventId(parts: readonly string[]): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(parts.join("\n")));
+  const bytes = new Uint8Array(digest).slice(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x80;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
+}
+
 export function makeServerEvent(input: {
   type: ServerType;
   userId: string | null;
@@ -138,9 +155,10 @@ export function makeServerEvent(input: {
   prelanderId: string;
   payload: Record<string, unknown>;
   now: number;
+  eventId?: string;
 }): StoredEvent {
   return {
-    event_id: crypto.randomUUID(),
+    event_id: input.eventId ?? crypto.randomUUID(),
     schema_version: 1,
     type: input.type,
     client_time: null,

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { prelanderFlows } from "../../src/domain/prelanders.ts";
-import { checkIncoming, makeServerEvent, SERVER_TYPES } from "../../src/events/envelope.ts";
+import { z } from "zod";
+import {
+  checkIncoming,
+  derivedEventId,
+  makeServerEvent,
+  SERVER_TYPES,
+} from "../../src/events/envelope.ts";
 import { browserEvent } from "../fixtures/event-bodies.ts";
 
 const check = (raw: unknown) => checkIncoming(raw, prelanderFlows);
@@ -122,6 +128,29 @@ describe("event envelope", () => {
       visit_id: "v1",
       prelander_id: "demo",
     });
+  });
+
+  it("ID-1 makeServerEvent keeps a given event id", () => {
+    const eventId = "0b0b0b0b-0b0b-4b0b-8b0b-0b0b0b0b0b0b";
+    const event = makeServerEvent({
+      type: "lead",
+      userId: null,
+      visitId: "v1",
+      prelanderId: "demo",
+      payload: {},
+      now: 1,
+      eventId,
+    });
+    expect(event.event_id).toBe(eventId);
+  });
+
+  it("PB-5 the postback EventID is derived from partner, type and transaction id", async () => {
+    const a = await derivedEventId(["partner-a", "lead", "tx-1"]);
+    expect(await derivedEventId(["partner-a", "lead", "tx-1"])).toBe(a);
+    expect(await derivedEventId(["partner-a", "lead", "tx-2"])).not.toBe(a);
+    expect(z.uuid().safeParse(a).success).toBe(true);
+    expect(a[14]).toBe("8");
+    expect(a[19]).toMatch(/[89ab]/);
   });
 
   it("R-14 a payload nested deeper than 32 levels is rejected", () => {
