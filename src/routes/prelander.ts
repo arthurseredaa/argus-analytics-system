@@ -1,10 +1,12 @@
 // Route: GET /p/:prelander, the server-rendered quiz page with entry selection.
-// Implements ADR 0002 and ADR 0004 (entry moment); serves ID-1, ID-2, QZ-1, QZ-2, QZ-5, QZ-7, OFF-8, OFF-10.
+// Implements ADR 0002 and ADR 0004 (entry moment); serves ID-1, ID-2, ID-4, NFR-4, QZ-1, QZ-4, QZ-2, QZ-5, QZ-7, OFF-8, OFF-10.
 import { Hono } from "hono";
 import type { AppEnv } from "../app.ts";
 import { readFacts } from "../db/facts.ts";
 import type { Flow } from "../domain/flow.ts";
 import { select } from "../domain/select.ts";
+import { makeServerEvent } from "../events/envelope.ts";
+import { emitInBackground } from "../events/producer.ts";
 import { renderQuizPage } from "../pages/quiz.ts";
 
 export function prelanderRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
@@ -24,7 +26,19 @@ export function prelanderRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
         console.log(JSON.stringify({ msg: "entry_redirect_deferred", reason: selection.reason }));
     }
 
-    return c.body(renderQuizPage(flow, id), 200, {
+    const visitId = crypto.randomUUID();
+    emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [
+      makeServerEvent({
+        type: "prelander_viewed",
+        userId: c.get("userId"),
+        visitId,
+        prelanderId: id,
+        payload: { reason: "quiz" },
+        now: Date.now(),
+      }),
+    ]);
+
+    return c.body(renderQuizPage(flow, id, visitId), 200, {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
     });

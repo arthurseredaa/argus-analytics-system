@@ -1,6 +1,15 @@
 // DB: the reads and deletes behind the test routes, kept apart from the facts the product uses.
 // Implements ADR 0003 (facts in D1) and ADR 0005 (events table); serves ID-1, PB-3, R-12, DEMO-2.
 
+export type TestEvent = {
+  event_id: string;
+  type: string;
+  visit_id: string;
+  seq: number | null;
+  schema_version: number;
+  payload: unknown;
+};
+
 export type TestStateRead = {
   user: { created_at: number; last_completed_at: number; email_hash: string } | null;
   counts: { users: number; clicks: number; conversions: number };
@@ -26,6 +35,27 @@ export async function readTestState(db: D1Database, userId: string): Promise<Tes
     partnerSecrets: ((partners?.results ?? []) as { secret_current_enc: string }[]).map(
       (p) => p.secret_current_enc,
     ),
+  };
+}
+
+// The caller's events in arrival order, and the size of the whole table.
+export async function readTestEvents(
+  events: D1Database,
+  userId: string,
+): Promise<{ events: TestEvent[]; total: number }> {
+  const [mine, total] = await events.batch([
+    events
+      .prepare(
+        `SELECT event_id, type, visit_id, seq, schema_version, payload
+         FROM events WHERE user_id = ?1 ORDER BY received_at, seq`,
+      )
+      .bind(userId),
+    events.prepare("SELECT COUNT(*) AS total FROM events"),
+  ]);
+  const rows = (mine?.results ?? []) as (Omit<TestEvent, "payload"> & { payload: string })[];
+  return {
+    events: rows.map((row) => ({ ...row, payload: JSON.parse(row.payload) as unknown })),
+    total: (total?.results[0] as { total: number } | undefined)?.total ?? 0,
   };
 }
 

@@ -15,7 +15,7 @@ export async function sendEvent(queue: Queue, event: StoredEvent): Promise<void>
 
 // Server events: the request does not wait for the Queue and does not fail when it refuses.
 export function emitInBackground(
-  ctx: ExecutionContext,
+  ctx: Pick<ExecutionContext, "waitUntil">,
   queue: Queue,
   events: readonly StoredEvent[],
 ): void {

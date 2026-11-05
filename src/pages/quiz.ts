@@ -26,8 +26,8 @@ function wordingHtml(wording: string): string {
     .join("");
 }
 
-function stepHtml(step: Step, hidden: boolean): string {
-  const open = `<section data-step="${esc(step.key)}"${hidden ? " hidden" : ""}>`;
+function stepHtml(step: Step, number: number, hidden: boolean): string {
+  const open = `<section data-step="${esc(step.key)}" data-step-number="${number}"${hidden ? " hidden" : ""}>`;
   const title = `<h2>${wordingHtml(step.wording)}</h2>`;
   if (step.kind === "email") {
     return `${open}${title}
@@ -117,8 +117,8 @@ const SCRIPT = `
 })();
 `;
 
-export function renderQuizPage(flow: Flow, prelanderId: string): string {
-  const steps = flow.steps.map((s) => stepHtml(s, s.key !== flow.first)).join("\n");
+export function renderQuizPage(flow: Flow, prelanderId: string, visitId: string): string {
+  const steps = flow.steps.map((s, i) => stepHtml(s, i + 1, s.key !== flow.first)).join("\n");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -135,7 +135,7 @@ export function renderQuizPage(flow: Flow, prelanderId: string): string {
 </style>
 </head>
 <body>
-<main data-prelander="${esc(prelanderId)}">
+<main data-prelander="${esc(prelanderId)}" data-visit="${esc(visitId)}">
 ${steps}
 <section data-result="offer" hidden>
   <h2 data-offer-name></h2>
