@@ -10,6 +10,7 @@
     "offer": "node scripts/offer.ts",
     "postback": "node scripts/postback.ts",
     "test:browser": "bash scripts/test-browser.sh",
+    "test:e2e": "bash scripts/demo.sh",
     "test:email-scan": "bash scripts/email-scan.sh",
     "types": "wrangler types --strict-vars=false --env-file /dev/null",
     "typecheck": "wrangler types --strict-vars=false --env-file /dev/null && tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json && tsc --noEmit -p tests/e2e/tsconfig.json",

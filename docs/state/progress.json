@@ -38,12 +38,15 @@
     {
       "id": 4,
       "title": "Report",
-      "status": "next"
+      "status": "done",
+      "closed": "2026-11-05",
+      "verified": "pnpm check (389 passed, 35 files); pnpm test -t \"AN-1|AN-5|AN-7\" (TEST-5, 13 passed); pnpm test -t \"AN-|R-17|DEMO-5|DEMO-7\" (54 passed); pnpm test:e2e against local wrangler dev ends with demo passed against http://localhost:8787; the redirect grep and the MVP-4 BigQuery client grep print nothing. pnpm test:e2e --base on the deployed Worker and GET /healthz are checked right after this commit deploys.",
+      "notes": "Built through subagent-driven development from docs/plans/part2-stage-4-report.md: five tasks written by Sonnet, a review per task (Opus for the SQL task), a whole-branch review on Opus and one fix wave. First stage without an approval gate (Arthur, 2026-11-05). Decisions in the plan, each from a default in the design: a click whose user was deleted counts as its own user; only the first Lead of a user and offer pair counts, later Leads add only payout (Q-23); M-15 counts a Purchase as without a Lead when no Lead was accepted at or before it; M-2 and M-11 are in the MVP report; report parameters are UTC dates with to inclusive, at most 92 days, 400 invalid_query otherwise; with an offer filter the funnel fields are null; the report is open, sets no cookie and is no-store, so the identity middleware now runs only on /api/events and /api/complete; three indexes for R-17; as_of and events_newest_at are dropped from diff snapshots; the demo script sends three step_viewed events; MVP-4 greps for a BigQuery client or credential, not the word. Also: CI caches the Playwright browsers and bounds the install to 3 minutes, after the install hung for 10 minutes twice on 2026-11-05. Defects the reviews found and fixed: payout totals carried float noise; two never-run statements and wrong metric tags in the AN-8 headers; demo.sh reset the deployed store before checking for .dev.vars.remote, and a failing postback exited without a FAIL line; the docs said a closed postback day never changes, which a user deletion breaks. Deferred: a test that cohort and postback totals agree over a full period; stop_dev_server does not wait for the port (decided by the CI run); drop-offs are not clamped, so a cross-midnight user can make a day's drop-off negative; esc() on the report page has no direct test. Explain-back questions for Arthur, not blocking: why can yesterday's row in the cohort view change today, and which view should finance read? Why does a second Lead for the same user and offer change the payout but not the Lead count? Where does a Lead on a click whose user was deleted go?"
     },
     {
       "id": 5,
       "title": "R2 files and the loader",
-      "status": "pending"
+      "status": "next"
     },
     {
       "id": 6,

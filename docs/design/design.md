@@ -159,7 +159,7 @@ Definitions and arithmetic are in [metrics-and-operations.md](metrics-and-operat
 | Topic | Summary | Source |
 |---|---|---|
 | Metrics | 29 metrics, M-1 to M-29, each with a denominator, grain and repeat-visit rule. Funnel metrics count distinct users per prelander and UTC day; "started the quiz" is `step_viewed` for step 1 | [Metric definitions](metrics-and-operations.md#metric-definitions) |
-| Late postbacks | Two report views: cohort by click date with an "as of" time, which grows as postbacks arrive, and postback by acceptance date, which never changes once a period ends | [Two report views](metrics-and-operations.md#two-report-views) |
+| Late postbacks | Two report views: cohort by click date with an "as of" time, which grows as postbacks arrive, and postback by acceptance date, which does not change once a period ends, except after a deletion request (see the postback view) | [Two report views](metrics-and-operations.md#two-report-views) |
 | Latency | Server-side p95 over 15 minutes: 50 ms for `/api/events`, 300 ms for entry, completion, `/go` and postbacks; an EU and US probe at 500 ms end to end | [Latency target](metrics-and-operations.md#latency-target-nfr-6), [nfr.md](../requirements/nfr.md#set-in-stage-4) |
 | Alerts | 12 alerts, from `freshness_lag` and `pending_oldest_file` to `quarantine_new_row` and the D1 size triggers, each with a threshold and an action | [Alerts](metrics-and-operations.md#alerts) |
 | Cost | About $29 to $31 a month at 18M events on Workers Paid; Queues is $21.20 of it. BigQuery storage adds about $0.41 a month per month of history | [Cost](metrics-and-operations.md#cost-at-the-design-load), [nfr.md](../requirements/nfr.md#set-in-stage-4) |

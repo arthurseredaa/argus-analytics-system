@@ -33,12 +33,12 @@ The spec asks for the agent instructions (this file), the initial plan, signific
 ## Session ritual
 
 - Start: the SessionStart hook prints the stage brief (next stage, last plan-history entry, open questions and risks, last commits). Read the stage plan it names. Once `docs/state/progress.json` names a stage as next, that is the only stage worked on.
-- End: one commit for the stage, state and plan history updated, and a one-paragraph note to the user on what is left. Nothing half-done is left uncommitted without a note.
+- End: one squash-merged commit for the stage, state and plan history updated, and a one-paragraph note to the user on what is left, with the stage's explain-back questions. Nothing half-done is left uncommitted without a note.
 - Path-scoped rules in `.claude/rules/` say how to write ADRs, requirements, plans and the AI log. They load when those files are touched.
 
 ## Working rules
 
-- Work in stages. Every implementation stage is followed by a verification step, and each stage stops for the user's approval. Commit and push only after approval.
+- Work in stages. Every implementation stage is followed by a verification step. From Part 2 stage 4 on (Arthur, 2026-11-05, see `docs/ai/plan-history.md`), stages run back to back with no approval gate: the AI squash-merges each stage PR once CI is green, checks the deployed Worker and starts the next stage. It stops only when it needs something from Arthur. Before stage 4 each stage waited for his approval.
 - Do not claim something works without showing the command output that proves it.
 - Ambiguities in the spec go to `docs/requirements/open-questions.md` before implementation. Do not settle them silently in code.
 - Email addresses never go into URLs or logs. Tests and fixtures use synthetic `@example.com` addresses only.

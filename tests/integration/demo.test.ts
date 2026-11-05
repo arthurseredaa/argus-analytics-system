@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildPostbackRequest } from "../../scripts/lib/postback-request.ts";
-import { call, captureQueue } from "../fixtures/events.ts";
+import { browserEvent } from "../fixtures/event-bodies.ts";
+import { call, captureQueue, deliver, postEvent } from "../fixtures/events.ts";
 import { TEST_PARTNER_SECRETS } from "../fixtures/facts.ts";
 import { newCookie } from "../fixtures/http.ts";
 import { userWithClick } from "../fixtures/postback.ts";
@@ -148,5 +149,105 @@ describe("the Lead return", () => {
     const entry = await call("/p/demo", { cookie }, { EVENTS_QUEUE: queue });
     expect(entry.status).toBe(302);
     expect(clickIdOf(entry)).not.toBe(clickId);
+  });
+});
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const readReport = async (): Promise<Record<string, number>> => {
+  const query = new URLSearchParams({ prelander: "demo", from: today(), to: today() });
+  const res = await call(`/api/report?${query}`, {});
+  expect(res.status).toBe(200);
+  return (await res.json()) as Record<string, number>;
+};
+
+describe.sequential("the report through the demo", () => {
+  it("DEMO-5 a Purchase changes the report", async () => {
+    const { clickId } = await userWithClick();
+    expect((await send("lead", clickId, `L-${crypto.randomUUID()}`)).status).toBe(202);
+    const before = await readReport();
+    const extra = { payout: "25.00", currency: "USD" };
+    expect((await send("purchase", clickId, `P-${crypto.randomUUID()}`, extra)).status).toBe(202);
+    const after = await readReport();
+    expect(after["purchase"]).toBe(before["purchase"]! + 1);
+    expect(after["lead"]).toBe(before["lead"]);
+  });
+
+  it("DEMO-7 the demo moves the report by the expected cells", async () => {
+    const a = await readReport();
+
+    const cookie = newCookie();
+    const { queue, sent } = captureQueue();
+    const env = { EVENTS_QUEUE: queue };
+    const visit = visitIdOf(await (await call("/p/demo", { cookie }, env)).text());
+    expect(visit).not.toBe("");
+
+    let seq = 1;
+    const post = async (overrides: Record<string, unknown>) =>
+      (await postEvent(browserEvent({ visit_id: visit, seq: seq++, ...overrides }), cookie, env))
+        .status;
+    for (const step of [1, 2, 3]) {
+      expect(await post({ type: "step_viewed", payload: { step, prefilled: false } })).toBe(202);
+    }
+    const answers = [
+      { step: 1, question_key: "gender", value: "women" },
+      { step: 2, question_key: "ethnicity", value: "asia" },
+    ];
+    for (const payload of answers) {
+      expect(await post({ type: "step_answered", payload })).toBe(202);
+    }
+
+    const done = await call(
+      "/api/complete",
+      {
+        method: "POST",
+        cookie,
+        body: JSON.stringify({
+          prelander_id: "demo",
+          visit_id: visit,
+          answers: { gender: "women", ethnicity: "asia" },
+          email: "user1@example.com",
+        }),
+      },
+      env,
+    );
+    expect(done.status).toBe(200);
+    const go = await call(`/go?prelander=demo&visit=${visit}`, { cookie }, env);
+    expect(go.status).toBe(302);
+    const clickId = clickIdOf(go);
+    expect(clickId).not.toBe("");
+
+    expect((await send("lead", clickId, `L-${crypto.randomUUID()}`)).status).toBe(202);
+    expect((await call("/p/demo", { cookie }, env)).status).toBe(302);
+    const txn = `P-${crypto.randomUUID()}`;
+    expect((await send("purchase", clickId, txn)).status).toBe(202);
+    expect((await send("purchase", clickId, txn)).status).toBe(200);
+
+    await deliver(sent.map((m) => m.body));
+    const b = await readReport();
+    const delta = (key: string) => b[key]! - a[key]!;
+    expect({
+      visits: delta("visits"),
+      started: delta("started"),
+      step_1: delta("step_1"),
+      step_2: delta("step_2"),
+      step_3: delta("step_3"),
+      completed: delta("completed"),
+      went_to_offer: delta("went_to_offer"),
+      transitions: delta("transitions"),
+      lead: delta("lead"),
+      purchase: delta("purchase"),
+    }).toEqual({
+      visits: 2,
+      started: 1,
+      step_1: 1,
+      step_2: 1,
+      step_3: 1,
+      completed: 1,
+      went_to_offer: 1,
+      transitions: 2,
+      lead: 1,
+      purchase: 1,
+    });
   });
 });
