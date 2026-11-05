@@ -1,5 +1,7 @@
-import { env } from "cloudflare:test";
+import { createExecutionContext, env, waitOnExecutionContext } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createApp } from "../../src/app.ts";
+import { prelanderFlows } from "../../src/domain/prelanders.ts";
 import { browserEvent } from "../fixtures/event-bodies.ts";
 import { captureQueue, deliver, eventsOf, failingQueue, postEvent } from "../fixtures/events.ts";
 import { newCookie } from "../fixtures/http.ts";
@@ -135,6 +137,58 @@ describe("POST /api/events", () => {
       newCookie(),
       { EVENTS_QUEUE: queue },
     );
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "too_large" });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("ID-1 a JSON array body is rejected and nothing is sent", async () => {
+    const { queue, sent } = captureQueue();
+    const res = await postEvent([browserEvent()], newCookie(), { EVENTS_QUEUE: queue });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_body", fields: [] });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("QZ-1 an event for an unknown prelander is rejected and nothing is sent", async () => {
+    const { queue, sent } = captureQueue();
+    const res = await postEvent(browserEvent({ prelander_id: "nope" }), newCookie(), {
+      EVENTS_QUEUE: queue,
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "unknown_prelander" });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("R-14 a body under 4096 characters but over 4096 bytes is rejected with 413", async () => {
+    const { queue, sent } = captureQueue();
+    const text = JSON.stringify(
+      browserEvent({ type: "page_error", payload: { note: "ї".repeat(2500) } }),
+    );
+    expect(text.length).toBeLessThan(4096);
+    expect(new TextEncoder().encode(text).length).toBeGreaterThan(4096);
+    const res = await postEvent(text, newCookie(), { EVENTS_QUEUE: queue });
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "too_large" });
+    expect(sent).toHaveLength(0);
+  });
+
+  it("R-14 a content-length header over 4 KB is rejected with 413 before the body is read", async () => {
+    const { queue, sent } = captureQueue();
+    const req = new Request("https://example.com/api/events", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": "5000",
+        cookie: newCookie(),
+      },
+      body: JSON.stringify(browserEvent()),
+    });
+    // The runtime may replace the header with the real length; the test needs the 5000 to survive.
+    expect(req.headers.get("content-length")).toBe("5000");
+    const ctx = createExecutionContext();
+    const res = await createApp(prelanderFlows).fetch(req, { ...env, EVENTS_QUEUE: queue }, ctx);
+    await waitOnExecutionContext(ctx);
     expect(res.status).toBe(413);
     expect(await res.json()).toEqual({ error: "too_large" });
     expect(sent).toHaveLength(0);
