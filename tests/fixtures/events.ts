@@ -1,6 +1,15 @@
 // Fixture: stored events, queue batches and reads of the events table for the consumer tests.
-import { createExecutionContext, createMessageBatch, env, getQueueResult } from "cloudflare:test";
+import {
+  createExecutionContext,
+  createMessageBatch,
+  env,
+  getQueueResult,
+  waitOnExecutionContext,
+} from "cloudflare:test";
 import type { QueueResult } from "cloudflare:test";
+import type { Hono } from "hono";
+import { createApp, type AppEnv } from "../../src/app.ts";
+import { prelanderFlows } from "../../src/domain/prelanders.ts";
 import worker from "../../src/index.ts";
 import { consumeEvents } from "../../src/events/consumer.ts";
 import type { StoredEvent } from "../../src/events/envelope.ts";
@@ -51,4 +60,61 @@ export async function eventsOf(userId: string): Promise<StoredRow[]> {
     .bind(userId)
     .all<Omit<StoredRow, "payload"> & { payload: string }>();
   return results.map((row) => ({ ...row, payload: JSON.parse(row.payload) }));
+}
+
+// The request half: a Queue that records what is sent, one that refuses, and a call that drives the app directly.
+export function captureQueue(): {
+  queue: Queue;
+  sent: { body: StoredEvent; contentType: string | undefined }[];
+} {
+  const sent: { body: StoredEvent; contentType: string | undefined }[] = [];
+  const queue = {
+    send: async (body: StoredEvent, options?: { contentType?: string }) => {
+      sent.push({ body, contentType: options?.contentType });
+    },
+    sendBatch: async () => {
+      throw new Error("sendBatch is not used");
+    },
+  } as unknown as Queue;
+  return { queue, sent };
+}
+
+export function failingQueue(): Queue {
+  return {
+    send: async () => {
+      throw new Error("queue down");
+    },
+    sendBatch: async () => {
+      throw new Error("queue down");
+    },
+  } as unknown as Queue;
+}
+
+// `app.fetch` with a real execution context; waitUntil work is finished before the response is returned to the test.
+export async function call(
+  path: string,
+  init: { method?: string; cookie?: string; body?: string },
+  envOverride?: Partial<Env>,
+  app: Hono<AppEnv> = createApp(prelanderFlows),
+): Promise<Response> {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (init.cookie !== undefined) headers.set("cookie", init.cookie);
+  const req = new Request(`https://example.com${path}`, {
+    method: init.method ?? "GET",
+    headers,
+    ...(init.body === undefined ? {} : { body: init.body }),
+  });
+  const ctx = createExecutionContext();
+  const res = await app.fetch(req, { ...env, ...envOverride }, ctx);
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
+export function postEvent(
+  event: unknown,
+  cookie: string,
+  envOverride?: Partial<Env>,
+): Promise<Response> {
+  const body = typeof event === "string" ? event : JSON.stringify(event);
+  return call("/api/events", { method: "POST", cookie, body }, envOverride);
 }

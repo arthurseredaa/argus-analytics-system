@@ -3,6 +3,7 @@
 import { Hono } from "hono";
 import type { Flow } from "./domain/flow.ts";
 import { completeRoute } from "./routes/complete.ts";
+import { eventsRoute } from "./routes/events.ts";
 import { identity } from "./routes/identity.ts";
 import { prelanderRoute } from "./routes/prelander.ts";
 import { testRoute } from "./routes/test.ts";
@@ -22,6 +23,7 @@ export function createApp(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   app.use("/__test/*", identity());
 
   app.route("/api", completeRoute(flows));
+  app.route("/api", eventsRoute(flows));
   app.route("/p", prelanderRoute(flows));
   app.route("/__test", testRoute());
 
