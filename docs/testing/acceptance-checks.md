@@ -28,10 +28,18 @@ pnpm test:email-scan # R-12: runs the demo with a synthetic email, asserts it is
 
 ### Environment
 
+Every card runs after `source scripts/acceptance.sh`. For the deployed Worker, set `BASE` first; the script keeps a value that is already set.
+
 ```sh
-export BASE=http://localhost:8787   # `wrangler dev`; use the staging URL for checks against Cloudflare
-export TMP=$(mktemp -d)             # scratch files for snapshots and logs
-export JAR=$TMP/user1.jar           # one cookie jar per synthetic user
+source scripts/acceptance.sh
+BASE=https://<worker>.workers.dev source scripts/acceptance.sh   # against Cloudflare
+# BASE  http://localhost:8787 (`wrangler dev`) unless set
+# TMP   a new mktemp -d unless set, for snapshots and logs
+# JAR   $TMP/user1.jar unless set, one cookie jar per synthetic user
+# state <jar>                                   the caller's user and the global counts from /__test/state
+# snap <file>                                   writes state for $JAR and the report into <file>
+# answer <jar> <key> <value> [seq]              one step_answered event, prints the HTTP status
+# complete <jar> <gender> <ethnicity> <email>   POST /api/complete, the only call that writes answers and email to D1
 ```
 
 Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in these checks: following a redirect would open a partner site (DEMO-9).
@@ -49,22 +57,6 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 | Test state | `GET /__test/state`: the caller's user (from the cookie) and global counts. `POST /__test/reset`. `POST /__test/seed` with users, answers, clicks and Leads as JSON, for cases that are slow to reach through the UI, such as a Lead on 001 or a click dated yesterday. All three answer `404` unless `TEST_ROUTES` is `on`. The deployed demo has it on (decision 1 of the stage 1 plan); a production deploy leaves it off. | ADR 0003 |
 | Offer config | `pnpm offer set-status 006 inactive`, `pnpm offer set-epu 001 0.95`. A data change, no deploy (Q-9). | ADR 0003 |
 | Signed postback helper | `pnpm postback lead --click <id> --txn <id>` prints the HTTP status and body (P-10). | ADR 0007 |
-
-Shell helpers used by the cards:
-
-```sh
-state() { curl -s -b "$1" "$BASE/__test/state" | jq -S .; }
-snap()  { { state "$JAR"; curl -s "$BASE/api/report" | jq -S .; } > "$1"; }
-answer() { # answer <jar> <question_key> <value> [seq]: one step_answered event, analytics only
-  step=$([ "$2" = gender ] && echo 1 || echo 2)
-  curl -s -b "$1" -c "$1" -o /dev/null -w '%{http_code}\n' -X POST "$BASE/api/events" -H 'content-type: application/json' \
-    -d "{\"event_id\":\"$(uuidgen | tr A-Z a-z)\",\"schema_version\":1,\"type\":\"step_answered\",\"client_time\":$(date +%s)000,\"visit_id\":\"v1\",\"seq\":${4:-1},\"prelander_id\":\"demo\",\"payload\":{\"step\":$step,\"question_key\":\"$2\",\"value\":\"$3\"}}"
-}
-complete() { # complete <jar> <gender> <ethnicity> <email>: the only call that writes answers and email to D1
-  curl -s -b "$1" -c "$1" -X POST "$BASE/api/complete" -H 'content-type: application/json' \
-    -d "{\"prelander_id\":\"demo\",\"answers\":{\"gender\":\"$2\",\"ethnicity\":\"$3\"},\"email\":\"$4\"}"
-}
-```
 
 ### Test names and data
 
