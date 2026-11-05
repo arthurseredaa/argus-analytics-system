@@ -94,3 +94,12 @@ Stage 2 of `docs/plans/part2-mvp-stages.md` said no content filter was needed on
 - The browser outbox drops an unsent event older than one day by its `client_time`. The outbox is there for short outages, and an event that arrives days late lands after the report for its day was counted.
 
 The stage 2 text of `part2-mvp-stages.md`, `docs/design/data-model.md` ("Personal data") and the stage 2 plan now say this. No stage was added or moved.
+
+## 2026-11-05: `/go` without an offer id, and a duplicate postback sends its event again
+
+Two changes to the design came out of the stage 3 plan.
+
+- `GET /go` takes no offer id. The design had `/go/{offer}?prelander=`, and the page put the offer id into the link, so a user could change `/go/003` to `/go/004` and get a click on 004. The AI proposed keeping the path and recording that as an accepted risk. Arthur pointed out that at the press D1 already holds everything `select()` needs, so the server can choose the offer itself from the cookie. A Fable review, asked without the AI's recommendation, reached the same design. `/go?prelander=&visit=` now runs `select()` with the current catalog, writes the click and answers `302`; a user with no `users` row gets a `302` to the quiz (Q-30). The event `offer_selected` with moment `redirect` is dropped, because `offer_click` carries the offer, the reason and the catalog version, so a visit stays at 9 events (A-1). design.md, data-model.md, request-flow.md, metrics-and-operations.md, nfr.md, ADR 0003, ADR 0004, offer-selection.md, the stage 3 text and acceptance-checks.md say this now. The session is drafted as `docs/ai/examples/10-go-without-offer-id.md`.
+- data-model.md said a duplicate postback sends no event, and ADR 0007 said it sends the event again with the same EventID. The stage follows ADR 0007: when the Queue fails after the D1 write, the partner's retry is a duplicate, and without the resend the event would be lost. The EventID is derived from the dedup key, so the event is stored once.
+
+No stage was added or moved.

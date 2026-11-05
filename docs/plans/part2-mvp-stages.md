@@ -193,11 +193,11 @@ Content:
 - `pnpm offer set-status <id> active|inactive` and `pnpm offer set-epu <id> <value>` write a new catalog version through `wrangler d1 execute`, no deploy (Q-9).
 
 Steps:
-- [ ] The automated cases of the cards above, plus `R-9 offer disabled after selection is re-selected at /go` and `OFF-11 click row exists before the 302`; then the code.
-- [ ] Fix the demo script comments in acceptance-checks.md that expect `200` for a new postback, where ADR 0007 says `202`, in this commit.
-- [ ] Explain back: Arthur walks a redelivered Lead and a second real Purchase, naming the key that tells them apart.
-- [ ] Verify: `pnpm test -- -t "OFF-3|OFF-4|OFF-9|ID-3"` (TEST-2, rows 16 to 23, 27, 28), `pnpm test -- -t "PB-5|TEST-3"` (TEST-3), `pnpm test -- -t "PB-3|PB-8"` (TEST-4) and `pnpm test -- -t "A-4|NFR-1|DEMO-3|DEMO-4|DEMO-6"` pass; against `BASE`, DEMO-3 prints `202`, DEMO-4 prints `302 https://asia-connect.example/?click_id=<new id>`, the repeated Lead prints `200` with `duplicate` and `state $JAR` shows one Lead; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" tests/ scripts/` prints nothing; the gate passes.
-- [ ] Approval, commit `feat: redirect, signed postbacks and the Lead return`, push.
+- [x] The automated cases of the cards above, plus `R-9 offer disabled after selection is re-selected at /go` and `OFF-11 click row exists before the 302`; then the code.
+- [x] Fix the demo script comments in acceptance-checks.md that expect `200` for a new postback, where ADR 0007 says `202`, in this commit.
+- [x] Explain back: Arthur walks a redelivered Lead and a second real Purchase, naming the key that tells them apart.
+- [x] Verify: `pnpm test -- -t "OFF-3|OFF-4|OFF-9|ID-3"` (TEST-2, rows 16 to 23, 27, 28), `pnpm test -- -t "PB-5|TEST-3"` (TEST-3), `pnpm test -- -t "PB-3|PB-8"` (TEST-4) and `pnpm test -- -t "A-4|NFR-1|DEMO-3|DEMO-4|DEMO-6"` pass; against `BASE`, DEMO-3 prints `202`, DEMO-4 prints `302 https://asia-connect.example/?click_id=<new id>`, the repeated Lead prints `200` with `duplicate` and `state $JAR` shows one Lead; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" tests/ scripts/` prints nothing; the gate passes.
+- [x] Approval, commit `feat: redirect, signed postbacks and the Lead return`, push.
 
 ---
 
@@ -376,6 +376,7 @@ The list Arthur walks through at the review, so nothing built is forgotten. Each
 | The Lead postback, the return without the quiz, the repeated postback that changes nothing | `pnpm postback`, `/p/demo` again, `pnpm postback` again | 3 |
 | The report in two views and the Purchase moving the numbers | `/report`, then a Purchase postback, then `/report` again | 4 |
 | An offer turned off without a deploy and `/go` re-selecting | `pnpm offer set-status 003 inactive`, then `/go?prelander=demo` | 3 |
+| A postback that is unsigned, stale or for another partner's click changes nothing; an unknown click waits in quarantine | `pnpm test -t "PB-3\|PB-4\|PB-8"`, then `counts.quarantine` in `__test/state` | 3 |
 | The event path: Queue, files in R2, the loader, and what the loader-paused drill showed | `__test/health`, the R2 bucket, the drill numbers from the stage 5 verify | 5 |
 | Alerts and latency: the data points, the alert log line for a wrong secret | Analytics Engine query, `wrangler tail` | 6 |
 | The path to production: a push to `main`, tests, migrations, deploy, `/healthz` with the commit | the CI run list | 0 |
