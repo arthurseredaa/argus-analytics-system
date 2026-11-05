@@ -1,7 +1,8 @@
 // Page: the quiz as server-rendered HTML with a small inline script.
 // Implements the "Quiz flow" decision of docs/plans/part2-mvp-stages.md (no ADR: reversible); serves QZ-1, QZ-2, QZ-7, OFF-8, OFF-10.
-// The script only shows steps and posts the completion. The server decides the offer.
+// The script shows steps, sends step events through the outbox and posts the completion. The server decides the offer.
 import { resolveNext, type Flow, type Step } from "../domain/flow.ts";
+import { OUTBOX_SCRIPT } from "./outbox.ts";
 
 const NO_OFFER = "No offer available";
 
@@ -51,11 +52,52 @@ function stepHtml(step: Step, number: number, hidden: boolean): string {
 </section>`;
 }
 
-const SCRIPT = `
+const SCRIPT = `${OUTBOX_SCRIPT}
 (function () {
   var root = document.querySelector("main");
   var prelander = root.dataset.prelander;
+  var visit = root.dataset.visit;
   var answers = {};
+  var seq = 0;
+
+  var storage = null;
+  try { storage = window.localStorage; } catch (e) { storage = null; }
+  var outbox = createOutbox({
+    storage: storage,
+    key: "funnel_outbox_v1",
+    cap: 100,
+    send: function (event) {
+      return fetch("/api/events", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(event),
+        keepalive: true
+      }).then(function (r) { return r.status; });
+    }
+  });
+
+  // A tracking failure (for example no secure context for randomUUID) never breaks the quiz.
+  function track(type, payload) {
+    try {
+      seq += 1;
+      outbox.enqueue({
+        event_id: crypto.randomUUID(),
+        schema_version: 1,
+        type: type,
+        client_time: Date.now(),
+        visit_id: visit,
+        seq: seq,
+        prelander_id: prelander,
+        payload: payload
+      });
+    } catch (e) {}
+  }
+  function stepViewed(key) {
+    document.querySelectorAll("section[data-step]").forEach(function (section) {
+      if (section.dataset.step !== key) return;
+      track("step_viewed", { step: Number(section.dataset.stepNumber), prefilled: false });
+    });
+  }
 
   function show(key) {
     document.querySelectorAll("section[data-step]").forEach(function (s) {
@@ -76,11 +118,26 @@ const SCRIPT = `
 
   document.querySelectorAll("button[data-value]").forEach(function (button) {
     button.addEventListener("click", function () {
-      answers[button.closest("section").dataset.step] = button.dataset.value;
+      var section = button.closest("section");
+      answers[section.dataset.step] = button.dataset.value;
+      track("step_answered", {
+        step: Number(section.dataset.stepNumber),
+        question_key: section.dataset.step,
+        value: button.dataset.value
+      });
       fill();
-      if (button.dataset.next) show(button.dataset.next);
+      if (button.dataset.next) {
+        show(button.dataset.next);
+        stepViewed(button.dataset.next);
+      }
     });
   });
+
+  window.addEventListener("online", function () { outbox.flush(); });
+  // Events left by an earlier load go first.
+  outbox.flush();
+  var first = document.querySelector("section[data-step]:not([hidden])");
+  if (first) stepViewed(first.dataset.step);
 
   var form = document.querySelector("[data-email-form]");
   form.addEventListener("submit", function (event) {
@@ -97,7 +154,12 @@ const SCRIPT = `
     fetch("/api/complete", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ prelander_id: prelander, answers: answers, email: input.value })
+      body: JSON.stringify({
+        prelander_id: prelander,
+        visit_id: visit,
+        answers: answers,
+        email: input.value
+      })
     }).then(function (res) {
       if (!res.ok) throw new Error("rejected");
       return res.json();

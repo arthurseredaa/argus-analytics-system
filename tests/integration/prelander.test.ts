@@ -73,6 +73,26 @@ describe("GET /p/:prelander", () => {
     expect(html).toMatch(/<form[^>]*\bmethod="post"/);
   });
 
+  it("QZ-4 the page sends step events to /api/events with its visit id", async () => {
+    const html = await (await getPath("/p/demo")).text();
+    expect(html).toMatch(/data-visit="[0-9a-f-]{36}"/);
+    expect(html).toContain("/api/events");
+    expect(html).toContain("createOutbox");
+    expect(html).toContain("funnel_outbox_v1");
+    for (const n of [1, 2, 3]) expect(html).toContain(`data-step-number="${n}"`);
+  });
+
+  it("QZ-4 R-12 the inline script is valid JavaScript and never hands the email to an event", async () => {
+    const html = await (await getPath("/p/demo")).text();
+    const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1] ?? "";
+    expect(script).toContain("createOutbox");
+    // Parsing only: the function is never called.
+    // oxlint-disable-next-line no-new-func -- a syntax check of the rendered script
+    expect(() => new Function(script)).not.toThrow();
+    // The email value is read for /api/complete only, never handed to track().
+    expect(script).not.toMatch(/track\([^)]*input/);
+  });
+
   it("QZ-1 step 1 offers women and men", async () => {
     const html = await (await getPath("/p/demo")).text();
     const gender = section(html, "gender");
@@ -129,6 +149,8 @@ describe("GET /p/:prelander", () => {
     const app = createApp(new Map([["four", parseFlow(fourSteps)]]));
     const html = await (await getPath("/p/four", undefined, app)).text();
     expect(stepKeys(html)).toEqual(["gender", "ethnicity", "age", "email"]);
+    expect(section(html, "age")).toContain('data-step-number="3"');
+    expect(section(html, "email")).toContain('data-step-number="4"');
     const age = section(html, "age");
     for (const v of ["18-29", "30-44", "45+"]) expect(age).toContain(`data-value="${v}"`);
 
