@@ -1,6 +1,6 @@
 .idea/
 .DS_Store
-node_modules/
+node_modules
 .wrangler/
 .dev.vars*
 !.dev.vars.example
@@ -10,3 +10,5 @@ coverage/
 CLAUDE.local.md
 .claude/settings.local.json
 worker-configuration.d.ts
+playwright-report/
+test-results/

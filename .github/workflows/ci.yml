@@ -24,13 +24,44 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm fmt:check
-      - run: pnpm test
+      - run: pnpm check
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - name: Write .dev.vars
+        run: |
+          cat > .dev.vars <<EOF
+          MASTER_KEY=$(openssl rand -base64 32)
+          EMAIL_HASH_KEY=$(openssl rand -base64 32)
+          PARTNER_SECRET_PARTNERA=$(openssl rand -base64 32)
+          PARTNER_SECRET_PARTNERB=$(openssl rand -base64 32)
+          TEST_ROUTES=on
+          GIT_SHA=ci
+          EOF
+      - run: pnpm migrate:local
+      - run: pnpm seed --local
+      - run: pnpm test:browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
 
   deploy:
-    needs: check
+    needs: [check, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: argus-cloudflare
     runs-on: ubuntu-latest

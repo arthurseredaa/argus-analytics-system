@@ -1,0 +1,4 @@
+#!/bin/sh
+# Pre-commit gate: the same pnpm check that CI runs. Wired by core.hooksPath from the prepare script.
+command -v pnpm >/dev/null 2>&1 || { echo "pre-commit: pnpm not found on PATH; run the commit from a shell with pnpm, or fix PATH" >&2; exit 1; }
+exec pnpm check

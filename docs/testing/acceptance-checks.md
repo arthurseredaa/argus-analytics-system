@@ -15,23 +15,31 @@ If a card cannot pass because the design changed, fix the card in the same commi
 
 ## Regression gate
 
-Run after every card. All four must pass. Commands are provisional until the project is set up (stage 6 of [part1-design-document.md](../plans/part1-design-document.md)).
+Run after every card. `pnpm check` must pass (typecheck, lint, format check, docs lint, state check and tests). So must `pnpm test:browser` against a local `wrangler dev`, which ends with the email scan over the wrangler log and the local state.
 
 ```sh
-pnpm typecheck
-pnpm lint            # oxlint, oxfmt --check
-pnpm test            # vitest with the Cloudflare Workers pool, unit and integration
-pnpm test:email-scan # R-12: runs the demo with a synthetic email, asserts it is absent from logs, URLs, Queue messages, R2 files and the events table
+pnpm check
+pnpm test:browser
 ```
 
 ## Conventions
 
 ### Environment
 
+Every card runs after `source scripts/acceptance.sh`. For the deployed Worker, export `BASE` first; the script keeps a value that is already set.
+
 ```sh
-export BASE=http://localhost:8787   # `wrangler dev`; use the staging URL for checks against Cloudflare
-export TMP=$(mktemp -d)             # scratch files for snapshots and logs
-export JAR=$TMP/user1.jar           # one cookie jar per synthetic user
+source scripts/acceptance.sh               # against wrangler dev
+# or, against Cloudflare:
+export BASE=https://<worker>.workers.dev
+source scripts/acceptance.sh
+# BASE  http://localhost:8787 (`wrangler dev`) unless set
+# TMP   a new mktemp -d unless set, for snapshots and logs
+# JAR   $TMP/user1.jar unless set, one cookie jar per synthetic user
+# state <jar>                                   the caller's user and the global counts from /__test/state
+# snap <file>                                   writes state for $JAR and the report into <file>
+# answer <jar> <key> <value> [seq]              one step_answered event, prints the HTTP status
+# complete <jar> <gender> <ethnicity> <email>   POST /api/complete, the only call that writes answers and email to D1
 ```
 
 Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in these checks: following a redirect would open a partner site (DEMO-9).
@@ -50,25 +58,9 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 | Offer config | `pnpm offer set-status 006 inactive`, `pnpm offer set-epu 001 0.95`. A data change, no deploy (Q-9). | ADR 0003 |
 | Signed postback helper | `pnpm postback lead --click <id> --txn <id>` prints the HTTP status and body (P-10). | ADR 0007 |
 
-Shell helpers used by the cards:
-
-```sh
-state() { curl -s -b "$1" "$BASE/__test/state" | jq -S .; }
-snap()  { { state "$JAR"; curl -s "$BASE/api/report" | jq -S .; } > "$1"; }
-answer() { # answer <jar> <question_key> <value> [seq]: one step_answered event, analytics only
-  step=$([ "$2" = gender ] && echo 1 || echo 2)
-  curl -s -b "$1" -c "$1" -o /dev/null -w '%{http_code}\n' -X POST "$BASE/api/events" -H 'content-type: application/json' \
-    -d "{\"event_id\":\"$(uuidgen | tr A-Z a-z)\",\"schema_version\":1,\"type\":\"step_answered\",\"client_time\":$(date +%s)000,\"visit_id\":\"v1\",\"seq\":${4:-1},\"prelander_id\":\"demo\",\"payload\":{\"step\":$step,\"question_key\":\"$2\",\"value\":\"$3\"}}"
-}
-complete() { # complete <jar> <gender> <ethnicity> <email>: the only call that writes answers and email to D1
-  curl -s -b "$1" -c "$1" -X POST "$BASE/api/complete" -H 'content-type: application/json' \
-    -d "{\"prelander_id\":\"demo\",\"answers\":{\"gender\":\"$2\",\"ethnicity\":\"$3\"},\"email\":\"$4\"}"
-}
-```
-
 ### Test names and data
 
-- Every automated test name starts with the requirement ID, then the risk or question ID if it covers one: `OFF-5 row 1 women+asia gives 003`, `PB-5 R-4 same postback twice counts once`. This extends the R-/Q- naming rule in `.claude/rules/requirements.md`, so `pnpm test -- -t "OFF-5"` runs one card.
+- Every automated test name starts with the requirement ID, then the risk or question ID if it covers one: `OFF-5 row 1 women+asia gives 003`, `PB-5 R-4 same postback twice counts once`. This extends the R-/Q- naming rule in `.claude/rules/requirements.md`, so `pnpm test -t "OFF-5"` runs one card.
 - Offer selection tests read their cases from the decision table in [offer-selection.md](../requirements/offer-selection.md) (P-9). Cards cite row numbers instead of copying rows.
 - Emails are synthetic: `user1@example.com`, `user2@example.com`. Partner secrets in tests are fixed test values, never real ones.
 - Every manual run starts with `curl -s -X POST $BASE/__test/reset` unless the card says otherwise.

@@ -72,11 +72,11 @@ Every test case in this plan sits on one of four levels. The level is part of th
 | Unit | vitest, plain Node, `tests/unit/` | one pure function: `select()`, `nextStep()`, `evaluateCondition()`, the HMAC signature, the report arithmetic | TEST-1, the OFF-12 rows, the flow config tests |
 | Integration | vitest with `@cloudflare/vitest-pool-workers`, `tests/integration/`: the test calls `SELF.fetch()` on the real Worker inside the Workers runtime, with local D1, Queue and R2 bindings, then reads the databases | one request end to end inside the Worker: route, validation, SQL, Queue message, response | TEST-2, TEST-3, TEST-4, TEST-5, the PB, ID, QZ, AN and R-12 cards |
 | End to end, HTTP | `pnpm test:e2e --base $BASE`, `tests/e2e/demo.test.ts` driving `scripts/demo.sh` with curl, against `wrangler dev` or the deployed Worker | the five demo steps in order with the expected answers and report cells (MVP-1, DEMO-2 to DEMO-6) | stage 4 onward, every "against `BASE`" check |
-| End to end, browser | Playwright with Chromium, `tests/e2e/quiz.spec.ts`, `pnpm test:browser --base $BASE`, run by hand before each hand-in and not in CI | the page's own JavaScript: a user clicks through the three steps, sees the offer, and `__test/state` holds every visit event with the right `seq` | stage 7 |
+| End to end, browser | Playwright with Chromium, `tests/e2e/quiz.spec.ts`, `pnpm test:browser`, run in CI in job `e2e` against `wrangler dev`; against the deployed Worker as `BASE=$BASE pnpm test:browser` | the page's own JavaScript: a user clicks through the three steps, sees the offer, and `__test/state` holds every visit event with the right `seq` | the quiz happy path; the email scan, which runs only against local `wrangler dev` (with `BASE` set it prints `email-scan skipped`); the `/go/003` link in stage 7 |
 
-The first two levels run in CI on every push and make up `pnpm test`. The HTTP level runs in CI against `wrangler dev` from stage 4. The browser level stays out of CI so the pipeline needs no browser download; it is the check that the curl script cannot give, that the page's JavaScript sends what the design says.
+The first two levels run in CI on every push and make up `pnpm test`. The HTTP level runs in CI against `wrangler dev` from stage 4. The browser level is the check that the curl script cannot give, that the page's JavaScript sends what the design says. The `e2e` job installs Chromium and runs the test against `wrangler dev`, and the deploy job waits for it.
 
-The regression gate is `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm test:email-scan`. The email scan is built in stage 6; until then the gate runs the first three, and the R-12 cases from stages 1 and 2 cover the email paths.
+The regression gate is `pnpm check` (typecheck, lint, fmt:check, lint:docs, state:check, test), run by the pre-commit hook and by CI. `pnpm test:browser` runs in CI and before each hand-in, and against local `wrangler dev` it ends with the email scan.
 
 The commit that closes Part 1 stage 6 points `progress.json` at this file, with stage 0 as `next` and Part 1 stage 7 recorded as `skipped` (its drills run here in stage 10, on the finished system). The Part 1 stage record up to stage 5 is in the `progress.json` of commit b97a87e; stage 6's closing is in plan history. Plan history gets an entry for the switch.
 
@@ -259,7 +259,7 @@ Estimate: 2.25 hours.
 
 Goal: latency and freshness are measured, alerts fire on the [nfr.md](../requirements/nfr.md#set-in-stage-4) thresholds, and the email is absent everywhere it must be. NFR-6 (in-Worker measurement), R-12, DEMO-8, AN-5 on Cloudflare.
 
-Files: `src/ops/metrics.ts`, `src/ops/alerts.ts`, `src/routes/probe.ts`, the alert cron and threshold variables, `tests/email-scan.test.ts` behind `pnpm test:email-scan`, alert and probe tests.
+Files: `src/ops/metrics.ts`, `src/ops/alerts.ts`, `src/routes/probe.ts`, the alert cron and threshold variables, `scripts/email-scan.sh` (`pnpm test:email-scan`, extended here), alert and probe tests.
 
 Read first: metrics-and-operations.md, "Latency target (NFR-6)" and "Alerts"; data-model.md, "Personal data"; cards DEMO-8, R-12.
 
@@ -267,12 +267,12 @@ Content:
 - One Analytics Engine data point per request: endpoint as index; duration and status as doubles; country and Cloudflare location as blobs. The loader adds a freshness point per run.
 - Alert cron every 5 minutes, one JSON log line per firing alert (id, value, threshold). Read directly: `freshness_lag`, `pending_oldest_file`, `rejected_new_file`, `quarantine_new_row`, `postbacks_without_conversions` (at least 5 postback requests in the last 15 minutes and none accepted, which is what a wrong partner secret or a broken click lookup looks like; the counter lives in a small D1 table written by the postback route), and once a day `d1_facts_size` and `d1_events_size`. Read through the Analytics Engine SQL API with a read-only token held as a secret: `selection_p95`, `worker_5xx_rate`, `d1_overload_errors`. Whether `dlq_not_empty` can be read the same way is settled in the stage; if not, it joins the design-only list.
 - `GET /__probe`: the entry D1 batch for a UserID with no rows, then `select()`, `200` with the D1 time; no cookie, no events.
-- `pnpm test:email-scan`: the demo with `user1@example.com`, then a search of captured logs, request URLs and `Location` headers, Queue messages, R2 files and the events table for the address and its URL-encoded form.
+- `pnpm test:email-scan` already exists: it takes the path of a `wrangler dev` log and searches that log and the local D1 and Queue state for the address and its URL-encoded form. This stage extends it to Queue messages on Cloudflare, R2 files and a `wrangler tail` capture against `BASE`.
 
 Steps:
 - [ ] The automated cases of DEMO-8 and R-12, plus `NFR-6 every request writes one data point`, `NFR-6 probe writes nothing and sets no cookie`, and one case per alert threshold; then the code.
 - [ ] Explain back: Arthur names the first alert he would see if the loader stopped, and if a partner's secret were wrong (`postbacks_without_conversions`).
-- [ ] Verify: `pnpm test:email-scan` passes; with `wrangler tail --format json > $TMP/tail.log` during a demo run against `BASE`, `grep -c` for `user1@example.com` and for `user1%40example.com` both print 0; an Analytics Engine SQL query for that hour gives p95 per endpoint, written down against 50 ms and 300 ms; drill: a signed postback for an unknown click, then `wrangler tail` shows `quarantine_new_row` within 5 minutes; `curl -s -o /dev/null -w '%{http_code} %{time_total}\n' $BASE/__probe` prints `200` and a time, recorded; the AN-5 manual card against `BASE` puts the Purchase on yesterday's cohort row and today's postback row; the four-command gate passes from here on.
+- [ ] Verify: `pnpm test:browser` passes against local `wrangler dev`, its email scan clean; with `wrangler tail --format json > $TMP/tail.log` during a demo run against `BASE`, `grep -c` for `user1@example.com` and for `user1%40example.com` both print 0; an Analytics Engine SQL query for that hour gives p95 per endpoint, written down against 50 ms and 300 ms; drill: a signed postback for an unknown click, then `wrangler tail` shows `quarantine_new_row` within 5 minutes; `curl -s -o /dev/null -w '%{http_code} %{time_total}\n' $BASE/__probe` prints `200` and a time, recorded; the AN-5 manual card against `BASE` puts the Purchase on yesterday's cohort row and today's postback row; `pnpm check` passes.
 - [ ] Approval, commit `feat: latency data, alert cron, probe and email scan`, push.
 
 ---
@@ -283,19 +283,19 @@ Estimate: 2.75 hours.
 
 Goal: a reviewer can install, run, test and repeat the demo from the README alone, and the quiz page works in a real browser. DEMO-1, DEMO-7, DEMO-9, DLV-1, DLV-3, DLV-4, DLV-5, NFR-8 step 3.
 
-Files: `README.md`, `scripts/demo.sh`, `tests/e2e/quiz.spec.ts`, `playwright.config.ts`.
+Files: `README.md`, `scripts/demo.sh`.
 
 Read first: the DEMO and DLV rows of requirements.md; cards DEMO-1, DEMO-7, DEMO-9, NFR-8.
 
 Content: an "Architecture in the code" section first: the diagram from design.md, a table from each component to its folder and ADR, the request path of the five demo steps through the code, and "what to read first" for a reviewer with 30 minutes; then the demo link (DLV-1); install and `wrangler dev`; tests and the gate; a test postback with `pnpm postback`; repeating the demo locally and on Cloudflare (DLV-3); test data and expected results (DEMO-7); how the transition is reproduced without a partner, as a `302` checked by its `Location` header with `.example` targets (DEMO-9); the implemented, simulated and design-only split from this plan (DLV-5); known limitations, each with the test that shows it (NFR-8); the CI badge (DLV-4); the redrive command; the deploy workflow (a push to `main` deploys), the paragraph on how a team would run it with feature branches, a preview deploy per pull request and flags, and the two paragraphs from the decisions table on one Worker rather than a monorepo and on pages without a frontend framework, each with when that would change; spend to date.
 
-Browser smoke test (Fable's proposal, accepted by Arthur on 2026-11-04): one Playwright scenario in Chromium against `BASE`. A fresh context opens `/p/demo`, answers women and asia, enters `user1@example.com`, sees the offer name for 003 and the `/go/003` link, and `GET /__test/state` with the context's cookie lists `prelander_viewed`, `step_viewed` 1 to 3, `step_answered` 1 and 2, `quiz_completed` and `offer_selected` with increasing `seq`. The browser never follows `/go` (DEMO-9). Playwright is a dev dependency only; `pnpm test:browser` is not part of `pnpm test` or CI.
+Browser smoke test (Fable's proposal, accepted by Arthur on 2026-11-04): the test already exists in `tests/e2e/quiz.spec.ts` and runs in CI against `wrangler dev`. This stage adds the `/go/003` link assertion and the run against the deployed `BASE`. The scenario: a fresh context opens `/p/demo`, answers women and asia, enters `user1@example.com`, sees the offer name for 003 and the `/go/003` link, and `GET /__test/state` with the context's cookie lists `prelander_viewed`, `step_viewed` 1 to 3, `step_answered` 1 and 2, `quiz_completed` and `offer_selected`, in arrival order: the browser's five events carry `seq` 1 to 5 and the server's three carry none. The browser never follows `/go` (DEMO-9). Playwright is a dev dependency only; `pnpm test:browser` is not part of `pnpm test`.
 
 Steps:
 - [ ] Draft through the humanizer skill; Arthur reads it whole.
-- [ ] Write `tests/e2e/quiz.spec.ts` and run it against `BASE`; fix whatever it finds in the page's JavaScript.
+- [ ] Add the `/go/003` link assertion to `tests/e2e/quiz.spec.ts` and run it against `BASE`; fix whatever it finds in the page's JavaScript.
 - [ ] Explain back: Arthur runs the demo from the README, saying what each command proves.
-- [ ] Verify: `git clone` into `$TMP/fresh` and follow only the README (`pnpm install`, the gate, `wrangler dev` with the demo script, the demo script against `BASE`), output pasted, every step matching the README; the DEMO-7 card finds each README row in the decision table with the same result; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" README.md tests/` prints nothing; the CI badge shows green; `pnpm test:browser --base $BASE` passes, its summary pasted, and the event list it prints has 8 events with `seq` 1 to 8.
+- [ ] Verify: `git clone` into `$TMP/fresh` and follow only the README (`pnpm install`, the gate, `wrangler dev` with the demo script, the demo script against `BASE`), output pasted, every step matching the README; the DEMO-7 card finds each README row in the decision table with the same result; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" README.md tests/` prints nothing; the CI badge shows green; `BASE=$BASE pnpm test:browser` passes, its summary pasted; the test asserts that the eight events arrive in order, the browser's five with `seq` 1 to 5 and the server's three with none.
 - [ ] Approval, commit `docs: README, demo instructions and the implementation split`, push.
 
 ---

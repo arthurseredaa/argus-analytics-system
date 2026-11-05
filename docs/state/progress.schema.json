@@ -7,6 +7,10 @@
   "additionalProperties": false,
   "required": ["plan", "updated", "stages"],
   "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Editor hint; points at this schema."
+    },
     "plan": {
       "type": "string",
       "description": "Path to the plan file these stages come from."
