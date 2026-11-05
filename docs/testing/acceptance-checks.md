@@ -28,11 +28,13 @@ pnpm test:email-scan # R-12: runs the demo with a synthetic email, asserts it is
 
 ### Environment
 
-Every card runs after `source scripts/acceptance.sh`. For the deployed Worker, set `BASE` first; the script keeps a value that is already set.
+Every card runs after `source scripts/acceptance.sh`. For the deployed Worker, export `BASE` first; the script keeps a value that is already set.
 
 ```sh
+source scripts/acceptance.sh               # against wrangler dev
+# or, against Cloudflare:
+export BASE=https://<worker>.workers.dev
 source scripts/acceptance.sh
-BASE=https://<worker>.workers.dev source scripts/acceptance.sh   # against Cloudflare
 # BASE  http://localhost:8787 (`wrangler dev`) unless set
 # TMP   a new mktemp -d unless set, for snapshots and logs
 # JAR   $TMP/user1.jar unless set, one cookie jar per synthetic user
@@ -60,7 +62,7 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 
 ### Test names and data
 
-- Every automated test name starts with the requirement ID, then the risk or question ID if it covers one: `OFF-5 row 1 women+asia gives 003`, `PB-5 R-4 same postback twice counts once`. This extends the R-/Q- naming rule in `.claude/rules/requirements.md`, so `pnpm test -- -t "OFF-5"` runs one card.
+- Every automated test name starts with the requirement ID, then the risk or question ID if it covers one: `OFF-5 row 1 women+asia gives 003`, `PB-5 R-4 same postback twice counts once`. This extends the R-/Q- naming rule in `.claude/rules/requirements.md`, so `pnpm test -t "OFF-5"` runs one card.
 - Offer selection tests read their cases from the decision table in [offer-selection.md](../requirements/offer-selection.md) (P-9). Cards cite row numbers instead of copying rows.
 - Emails are synthetic: `user1@example.com`, `user2@example.com`. Partner secrets in tests are fixed test values, never real ones.
 - Every manual run starts with `curl -s -X POST $BASE/__test/reset` unless the card says otherwise.

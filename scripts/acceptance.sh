@@ -1,6 +1,6 @@
 # Shell helpers for the acceptance cards in docs/testing/acceptance-checks.md.
 # Source it, do not run it: source scripts/acceptance.sh. It sets BASE, TMP and JAR when unset.
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+if [[ -n ${BASH_SOURCE[0]:-} && ${BASH_SOURCE[0]} == "$0" ]] || [[ -n ${ZSH_EVAL_CONTEXT:-} && ${ZSH_EVAL_CONTEXT} != *:file* ]]; then
   echo "source this file: source scripts/acceptance.sh" >&2
   exit 1
 fi
