@@ -66,6 +66,7 @@ const SCRIPT = `${OUTBOX_SCRIPT}
     storage: storage,
     key: "funnel_outbox_v1",
     cap: 100,
+    maxAgeMs: 86400000,
     send: function (event) {
       return fetch("/api/events", {
         method: "POST",

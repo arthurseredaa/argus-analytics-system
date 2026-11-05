@@ -1,5 +1,6 @@
 // Page: the browser outbox that keeps step events until the server accepts them, as a JavaScript string for the quiz page.
 // Implements ADR 0005 (client-generated event ids make a resend safe); serves ID-1, TEST-3, NFR-4, R-3, R-12, R-14.
+// Unsent events expire after maxAgeMs (one day on the quiz page).
 // Plain browser JavaScript without a build step. Unit-tested in Node by evaluating the string (tests/unit/outbox.test.ts).
 export const OUTBOX_SCRIPT = `
 function createOutbox(opts) {
@@ -7,11 +8,19 @@ function createOutbox(opts) {
   var inFlight = false;
   var retryTimer = false;
   var setTimer = opts.setTimer || (typeof setTimeout === "function" ? setTimeout : null);
+  var now = opts.now || Date.now;
+
+  // The outbox covers short outages. An event older than opts.maxAgeMs (by its client_time) is
+  // dropped unsent: it arrives too late to matter.
+  function fresh(event) {
+    if (!opts.maxAgeMs || !event || typeof event.client_time !== "number") return true;
+    return now() - event.client_time <= opts.maxAgeMs;
+  }
 
   try {
     if (opts.storage) {
       var saved = JSON.parse(opts.storage.getItem(opts.key) || "[]");
-      if (Array.isArray(saved)) list = saved;
+      if (Array.isArray(saved)) list = saved.filter(fresh);
     }
   } catch (e) {
     list = [];
@@ -42,7 +51,11 @@ function createOutbox(opts) {
   }
 
   function flush() {
-    if (inFlight || list.length === 0) return;
+    if (inFlight) return;
+    var before = list.length;
+    list = list.filter(fresh);
+    if (list.length !== before) save();
+    if (list.length === 0) return;
     var event = list[0];
     inFlight = true;
     var request;

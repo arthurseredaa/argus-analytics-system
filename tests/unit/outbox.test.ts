@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { OUTBOX_SCRIPT } from "../../src/pages/outbox.ts";
 
-type Evt = { event_id: string; n?: number };
+type Evt = { event_id: string; n?: number; client_time?: number };
 type Outbox = { enqueue(e: Evt): void; flush(): void; pending(): Evt[] };
 type Opts = {
   storage: { getItem(k: string): string | null; setItem(k: string, v: string): void } | null;
@@ -9,6 +9,8 @@ type Opts = {
   key: string;
   cap: number;
   setTimer?: (fn: () => void, ms: number) => unknown;
+  maxAgeMs?: number;
+  now?: () => number;
 };
 
 // The script is plain browser JavaScript in a string, so the test evaluates it the way a page would.
@@ -182,5 +184,53 @@ describe("outbox", () => {
     await tick();
     expect(box.pending()).toEqual([]);
     expect(timers).toHaveLength(2);
+  });
+
+  it("R-14 events older than the age limit are dropped from storage and never sent", async () => {
+    const DAY = 86_400_000;
+    const NOW = 10 * DAY;
+    const storage = mapStorage();
+    storage.map.set(
+      KEY,
+      JSON.stringify([
+        { event_id: "old", client_time: NOW - DAY - 1 },
+        { event_id: "edge", client_time: NOW - DAY },
+        { event_id: "new", client_time: NOW - 1000 },
+      ]),
+    );
+    const send = vi.fn<(e: Evt) => Promise<number>>().mockResolvedValue(202);
+    const box = createOutbox({ storage, send, key: KEY, cap: 100, maxAgeMs: DAY, now: () => NOW });
+    expect(box.pending().map((e) => e.event_id)).toEqual(["edge", "new"]);
+    box.flush();
+    await tick();
+    await tick();
+    expect(send.mock.calls.map((c) => c[0].event_id)).toEqual(["edge", "new"]);
+  });
+
+  it("R-14 an event that ages past the limit while waiting for a retry is dropped, not sent", async () => {
+    const DAY = 86_400_000;
+    let now = 5 * DAY;
+    const send = vi
+      .fn<(e: Evt) => Promise<number>>()
+      .mockResolvedValueOnce(503)
+      .mockResolvedValue(202);
+    const storage = mapStorage();
+    const box = createOutbox({
+      storage,
+      send,
+      key: KEY,
+      cap: 100,
+      maxAgeMs: DAY,
+      now: () => now,
+    });
+    box.enqueue({ event_id: "a", client_time: now });
+    await tick();
+    expect(send).toHaveBeenCalledTimes(1);
+    now += DAY + 1;
+    box.flush();
+    await tick();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(box.pending()).toEqual([]);
+    expect(JSON.parse(storage.map.get(KEY)!)).toEqual([]);
   });
 });
