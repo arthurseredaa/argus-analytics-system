@@ -42,10 +42,10 @@ describe("GET /p/:prelander", () => {
 
   it("ID-2 the 500 path from onError still carries the identity cookie", async () => {
     const app = createApp(new Map());
-    app.get("/api/boom", () => {
+    app.get("/api/events", () => {
       throw new Error("boom");
     });
-    const res = await getPath("/api/boom", undefined, app);
+    const res = await getPath("/api/events", undefined, app);
     expect(res.status).toBe(500);
     expect(cookieFrom(res)).toMatch(/^uid=[0-9a-f-]{36}$/);
   });

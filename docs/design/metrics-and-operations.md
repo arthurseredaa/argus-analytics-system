@@ -38,12 +38,12 @@ Rules that apply to every row:
 | M-7 | Answered step 2 | distinct `user_id` with `step_answered` where `step` = 2 | none, a count | prelander, day | as M-6 | `step_answered` |
 | M-8 | Completed the quiz | distinct `user_id` with `quiz_completed` | none, a count | prelander, day | once per user per cohort; a retried completion emits a second event and still counts once | `quiz_completed` |
 | M-9 | No offer shown | distinct `user_id` with `offer_selected` where `reason` = `no_offer` | none, a count | prelander, day | once per user per cohort | `offer_selected` |
-| M-10 | Went to an offer | distinct `user_id` with a click whose `reason` is not `lead_return` | none, a count | prelander, offer, day | once per user per offer per cohort; a Lead return click is a repeat transition and does not add a user to the offer (Q-21) | `offer_click`; `clicks` in the MVP |
+| M-10 | Went to an offer | distinct `user_id` with a click whose `reason` is not `lead_return` | none, a count | prelander, offer, day | once per user per offer per cohort; a Lead return click is a repeat transition and does not add a user to the offer (Q-21); a click whose user was deleted counts as its own user, as in M-13 | `offer_click`; `clicks` in the MVP |
 | M-11 | Transitions | distinct `click_id`, every reason | none, a count | prelander, offer, day | every click counts, Lead returns and double clicks included | `offer_click`; `clicks` in the MVP |
 | M-12 | Lead returns | distinct `visit_id` of `prelander_viewed` where `reason` = `lead_return` | none, a count | prelander, day | every visit counts | `prelander_viewed` |
 | M-13 | Leads | distinct (`user_id`, `offer_id`) with an accepted Lead. The first accepted Lead of the pair carries the count, with its click's prelander and date | none, a count | prelander, offer, day | one per user per offer, ever (Q-23); a second Lead for the pair is stored and not counted. A Lead whose click lost its user to a deletion request counts once per click | `conversions` joined with `clicks`; `lead` events |
 | M-14 | Purchases | every accepted Purchase, distinct (`partner_id`, `transaction_id`) | none, a count | prelander, offer, day | every Purchase counts, a second real Purchase included (PB-5) | `conversions` joined with `clicks`; `purchase` events |
-| M-15 | Purchases without a Lead | M-14 rows with no Lead for the same user and offer | none, a count | prelander, offer, day | a flag; these Purchases stay in M-14 (Q-8) | `conversions` joined with `clicks` |
+| M-15 | Purchases without a Lead | M-14 rows with no Lead for the same user and offer | none, a count | prelander, offer, day | a flag; these Purchases stay in M-14 (Q-8); no Lead accepted at or before the Purchase, so a Lead that arrives later does not clear the flag and a closed day never changes | `conversions` joined with `clicks` |
 | M-16 | Payout received | sum of `payout` of accepted Leads and Purchases, per `currency` | none, a sum | prelander, offer, day | each accepted postback adds its payout, including a second Lead for the same pair, because the partner paid for it | `conversions`; `lead` and `purchase` events |
 
 ### Answers
@@ -73,9 +73,9 @@ D1 keeps only the current answer per user and question, while BigQuery has every
 
 ### What the MVP report shows
 
-The MVP report (AN-6, MVP-4) shows M-1, M-3, M-4, M-5, M-8, M-10, M-13 and M-14, the drop-offs M-23, and the rates M-20 to M-22 and M-24 to M-28 computed from them. The postback view adds M-15 and M-16. Funnel steps come from the MVP `events` table; clicks, Leads and Purchases come from the facts database, so a test postback shows up at once ([ADR 0005](../adr/0005-event-ingestion-and-buffering.md)). The AN-1 fixture gives started 3, reached step 2 2, reached step 3 2: "step N" in that card is "reached step N".
+The MVP report (AN-6, MVP-4) shows M-1 to M-5, M-8, M-10, M-11, M-13 and M-14, the drop-offs M-23, and the rates M-20 to M-22 and M-24 to M-28 computed from them. M-2 is there because it is the denominator of M-28, and M-11 because the AN-1 fixture and the demo numbers expect transitions. The postback view adds M-15 and M-16. Funnel steps come from the MVP `events` table; clicks, Leads and Purchases come from the facts database, so a test postback shows up at once ([ADR 0005](../adr/0005-event-ingestion-and-buffering.md)). The AN-1 fixture gives started 3, reached step 2 2, reached step 3 2: "step N" in that card is "reached step N".
 
-M-2, M-6, M-7, M-9, M-11, M-12, M-17 to M-19 and M-29 are BigQuery queries over the `events` view and are not in the MVP report.
+M-6, M-7, M-9, M-12, M-17 to M-19 and M-29 are BigQuery queries over the `events` view and are not in the MVP report.
 
 ## Two report views
 

@@ -184,6 +184,7 @@ CREATE TABLE clicks (
   FOREIGN KEY (catalog_version, offer_id) REFERENCES offers (version, id)
 );
 CREATE INDEX clicks_user ON clicks (user_id);
+CREATE INDEX clicks_created_at ON clicks (created_at);  -- the cohort view reads clicks by day
 ```
 
 - Put there by ADR 0003 and ADR 0007 (P-2). The composite key to `offers` also ties the click to a row of `catalog_history`, through `offers.version`.
@@ -212,6 +213,7 @@ CREATE TABLE conversions (
   UNIQUE (partner_id, type, transaction_id)
 );
 CREATE INDEX conversions_click ON conversions (click_id);
+CREATE INDEX conversions_type_accepted ON conversions (type, accepted_at);  -- the postback view reads by day
 ```
 
 - Put there by ADR 0007 (as `postbacks`). One row per accepted Lead or Purchase.
@@ -261,6 +263,8 @@ CREATE TABLE quarantine (
 ### MVP events database
 
 In the MVP a second D1 database stands in for BigQuery (ADR 0005). It has one table, `events`, with the envelope fields below as columns, `payload` as JSON text and `event_id TEXT PRIMARY KEY`. The loader inserts with `INSERT ... ON CONFLICT (event_id) DO NOTHING`, so a resent or redelivered event is stored once. It is a separate database so that its writes do not queue in front of selection, and it is removed when the loader targets BigQuery. It holds no facts and the rules never read it.
+
+It has one index besides the primary key, `events_received_at ON events (received_at)`. Every report query filters on a `received_at` range, so rows read grow with the period asked for and not with the size of the table (R-17).
 
 The size estimate in `nfr.md` assumed a D1 row for every user; since only users who complete the quiz now get rows, stage 4 revisits it.
 

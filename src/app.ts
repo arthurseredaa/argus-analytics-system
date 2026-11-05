@@ -8,6 +8,7 @@ import { goRoute } from "./routes/go.ts";
 import { identity } from "./routes/identity.ts";
 import { postbackRoute } from "./routes/postback.ts";
 import { prelanderRoute } from "./routes/prelander.ts";
+import { reportRoute } from "./routes/report.ts";
 import { testRoute } from "./routes/test.ts";
 
 export type AppEnv = {
@@ -21,12 +22,15 @@ export function createApp(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   app.get("/healthz", (c) => c.json({ sha: c.env.GIT_SHA }));
 
   app.use("/p/*", identity());
-  app.use("/api/*", identity());
+  // Only the two browser endpoints get a user id; the report is open and sets no cookie.
+  app.use("/api/events", identity());
+  app.use("/api/complete", identity());
   app.use("/go/*", identity());
   app.use("/__test/*", identity());
 
   app.route("/api", completeRoute(flows));
   app.route("/api", eventsRoute(flows));
+  app.route("/", reportRoute());
   app.route("/p", prelanderRoute(flows));
   app.route("/go", goRoute(flows));
   app.route("/__test", testRoute());
