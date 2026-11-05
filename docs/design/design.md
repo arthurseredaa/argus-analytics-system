@@ -42,7 +42,7 @@ One Worker serves every endpoint:
 
 | Endpoint | What it does | Facts in D1 | Events |
 |---|---|---|---|
-| `GET /p/{prelander}` | Sets the identity cookie, runs selection at entry, renders the quiz or answers `302` (Lead return, rule 3 skip) | reads in one batch; writes a click only when it redirects | `prelander_viewed`; on a redirect also `offer_selected`, `offer_click` |
+| `GET /p/{prelander}` | Sets the identity cookie, runs selection at entry, renders the quiz or answers `302` (Lead return, rule 3 skip) | reads in one batch; writes a click only when it redirects | `prelander_viewed`; on a redirect also `offer_selected`, `offer_click`; on the no-offer page also `offer_selected` (`no_offer`) |
 | `POST /api/events` | Takes one browser event, sends it to the Queue, answers `202` | none | the event |
 | `POST /api/complete` | Takes the answers and the email at the end of the quiz, runs selection, returns the offer | writes `users`, `user_answers`; reads Leads and the catalog | `quiz_completed`, `offer_selected` |
 | `GET /go?prelander=&visit=` | Runs selection again for the cookie's user, stores the click, answers `302` with `click_id` | reads in one batch; writes `clicks` | `offer_click` |
@@ -111,7 +111,7 @@ Answers reach D1 in one request, `POST /api/complete`, at the end of the quiz, t
 | Completion request retried | The same values are written again; nothing changes | upsert |
 | Browser resends an event, Queue redelivers one | Stored once | `event_id`, created in the browser and kept on resend (R-3, R-8) |
 | Events arrive out of order | Analytics orders by `received_at`, then `seq` in a visit; D1 does not depend on event order | envelope |
-| Partner redelivers a postback | Answered `200` `duplicate`, nothing written | `UNIQUE (partner_id, type, transaction_id)` (R-4) |
+| Partner redelivers a postback | Answered `200` `duplicate`, nothing written; the event is sent again with the same EventID | `UNIQUE (partner_id, type, transaction_id)` (R-4) |
 | Second real Purchase | New `transaction_id`, so a new row, counted | same key (PB-5) |
 | Second Lead for the same user and offer | Stored, counted once | one Lead per user per offer (Q-23) |
 | Several Leads on active offers | The Lead we accepted last wins, then higher EPU, then lower offer ID | `conversions.accepted_at` (Q-10) |
@@ -122,7 +122,7 @@ A retried completion emits `quiz_completed` and `offer_selected` again with new 
 
 A partner calls `POST /postback/v1/{partner}` with a JSON body: `type`, `click_id`, `transaction_id`, `occurred_at`, and optionally `payout`, `currency` and `partner_user_id` ([ADR 0007](../adr/0007-postback-contract-and-auth.md)). The signature is HMAC-SHA256 over the timestamp and the raw body, checked before parsing and compared in constant time. A timestamp more than 5 minutes from our clock is rejected; inside the window a replay is caught by the deduplication key. Each partner has its own secret, stored in `partners` encrypted with AES-GCM under a master key held in a Worker secret, so a database export holds only ciphertext. Rotation keeps a current and a previous secret, and both are accepted until the partner confirms the switch. A new partner is one row. Request logs do not record bodies or signatures.
 
-The endpoint answers `401` for an unknown partner, a bad signature or a stale timestamp; `400` for a malformed body or a click that belongs to another partner's offer (Q-24); `200` `duplicate` for a redelivery; `503` when D1 is down, so the partner retries. None of these change data (PB-8).
+The endpoint answers `401` for an unknown partner, a bad signature or a stale timestamp; `400` for a malformed body or a click that belongs to another partner's offer (Q-24); `200` `duplicate` for a redelivery; `503` when D1 or the Queue fails, so the partner retries. The rejected answers change no data (PB-8). If the Queue fails, the conversion row is already written; the partner's retry is answered `200` `duplicate` and the event is sent again under the same EventID.
 
 A postback before its click cannot happen for a real click: `/go` and the entry redirect write the click row before they send the `302` (R-6). A correctly signed postback for a click we do not have, whether removed by the 90-day cleanup, sent by a broken integration or forged, is stored in `quarantine` with its raw body. It is answered `202`, so the partner stops retrying, it is not counted, and an alert fires on any new row (Q-11). It is never matched to a user by anything other than the click ID.
 

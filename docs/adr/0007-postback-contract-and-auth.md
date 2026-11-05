@@ -74,6 +74,7 @@ In order: check the partner, the signature and the timestamp; parse and validate
 | Missing or invalid field, body over 16 KB | `400` | nothing |
 | Click belongs to an offer of another partner (Q-24) | `400` | nothing |
 | Unknown `click_id` | `202` | row in `postback_quarantine` with the reason, not counted, alert (Q-11) |
+| A partner secret or `MASTER_KEY` cannot be used (operator error) | `500` `config_error` | nothing |
 | D1 unavailable | `503` | nothing; the partner retries |
 
 - The deduplication key is `(partner_id, type, transaction_id)`, a unique index in D1 (P-4, R-4). A redelivery has the same `transaction_id`; a second real purchase has a new one, so it is counted (PB-5).

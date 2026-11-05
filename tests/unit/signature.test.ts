@@ -16,6 +16,7 @@ const check = (
     secrets: over.secrets ?? [secret],
     nowMs: over.nowMs ?? nowMs,
   });
+const wrongHex = (i: number) => i.toString(16).padStart(64, "0");
 const header = async (key: string) => `t=${t},v1=${await signPayload(key, t, body)}`;
 
 describe("postback signature", () => {
@@ -39,6 +40,15 @@ describe("postback signature", () => {
     expect(await check(`t=${t},v1=abc`)).toBe("malformed");
     expect(await check(`t=${t},v1=${"g".repeat(64)}`)).toBe("malformed");
     expect(await check(`t=${t},v1=${"a".repeat(65)}`)).toBe("malformed");
+  });
+  it("PB-3 R-11 more than 8 v1 values give malformed", async () => {
+    const good = await signPayload(secret, t, body);
+    const withGood = (n: number) =>
+      [...Array.from({ length: n - 1 }, (_, i) => wrongHex(i + 1)), good]
+        .map((v) => `v1=${v}`)
+        .join(",");
+    expect(await check(`t=${t},${withGood(9)}`)).toBe("malformed");
+    expect(await check(`t=${t},${withGood(8)}`)).toBe("ok");
   });
   it("PB-3 R-11 a wrong secret gives mismatch", async () => {
     expect(await check(await header("another-secret"))).toBe("mismatch");

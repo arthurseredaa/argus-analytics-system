@@ -74,5 +74,10 @@ const { url, init } = await buildPostbackRequest({
   ...(values["payout"] === undefined ? {} : { payout: values["payout"] as string }),
   ...(values["currency"] === undefined ? {} : { currency: values["currency"] as string }),
 });
-const res = await fetch(url, init);
+let res: Response;
+try {
+  res = await fetch(url, init);
+} catch {
+  fail(`cannot reach ${baseUrl.origin}`);
+}
 console.log(`${res.status} ${await res.text()}`);

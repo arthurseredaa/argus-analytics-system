@@ -3,12 +3,14 @@
 // WebCrypto only and erasable TypeScript, so the Worker and scripts/postback.ts share it.
 
 export const SIGNATURE_WINDOW_S = 300;
+export const MAX_V1_VALUES = 8;
 
 const enc = new TextEncoder();
 const HEADER_PATTERN = /^t=(\d{1,15})((?:,v1=[^,]*)+)$/;
 const HEX_64 = /^[0-9a-f]{64}$/i;
 
-// `t=<digits>,v1=<hex>[,v1=<hex>...]`. The v1 values are not checked for shape here.
+// `t=<digits>,v1=<hex>[,v1=<hex>...]`, at most MAX_V1_VALUES v1 entries. The v1 values are not
+// checked for shape here.
 export function parseSignatureHeader(
   header: string | undefined,
 ): { t: number; v1: string[] } | null {
@@ -19,6 +21,7 @@ export function parseSignatureHeader(
     .split(",")
     .slice(1)
     .map((part) => part.slice("v1=".length));
+  if (v1.length > MAX_V1_VALUES) return null;
   return { t: Number(match[1]), v1 };
 }
 

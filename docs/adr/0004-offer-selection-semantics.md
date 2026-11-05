@@ -36,7 +36,7 @@ Several Leads for active offers (Q-10), after Leads for disabled offers are remo
 
 When selection runs:
 
-1. At entry and at quiz completion, with a status check at the redirect. Entry is the only moment rule 1 can skip the quiz; completion is the first moment a new user has answers; the redirect check covers R-9. Where it breaks: three call sites read the same facts from D1, so a slow or overloaded D1 delays the entry page, the offer choice and the redirect alike, and the p95 alert from ADR 0003 has to cover all three.
+1. At entry, at quiz completion and again on every press at the redirect. Entry is the only moment rule 1 can skip the quiz; completion is the first moment a new user has answers; selection at the redirect covers R-9. Where it breaks: three call sites read the same facts from D1, so a slow or overloaded D1 delays the entry page, the offer choice and the redirect alike, and the p95 alert from ADR 0003 has to cover all three.
 2. Only at completion. Breaks rule 1: a user with a Lead would see the quiz.
 3. Only at entry. Breaks every new user, who has no answers at entry.
 

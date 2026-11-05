@@ -344,8 +344,10 @@ Every event has the same envelope (ADR 0005). One event per request (Arthur's de
 | `quiz_completed` | server, `POST /api/complete` | `answers` object, no email | visit; the current answers in BigQuery |
 | `offer_selected` | server | `offer_id` (null for `no_offer`), `reason` (`lead_return`, `best_epu`, `fallback_universal`, `no_offer`), `moment` (`entry`, `completion`), `catalog_version` | offer, catalog version (P-3) |
 | `offer_click` | server, `GET /go` or the entry redirect | `click_id`, `offer_id`, `catalog_version`, `reason` | click, offer, prelander |
-| `lead` | server, accepted or duplicate postback | `click_id`, `offer_id`, `partner_id`, `transaction_id`, `occurred_at`, `payout`, `currency` | click, and through it the user, offer and prelander (PB-4, Q-22) |
+| `lead` | server, accepted or duplicate postback | `click_id`, `offer_id`, `partner_id`, `transaction_id`, `occurred_at` (Unix milliseconds), `payout` (the partner's decimal string, or null), `currency` (ISO 4217, or null) | click, and through it the user, offer and prelander (PB-4, Q-22) |
 | `purchase` | server, accepted or duplicate postback | same as `lead` | same |
+
+`conversions.payout` stores the payout as a number (REAL), while the event carries the partner's string.
 
 Step 3 has no browser answer event; finishing it is `quiz_completed`. A duplicate postback sends its `lead` or `purchase` again with the same EventID, derived from `(partner_id, type, transaction_id)`. If the Queue refused the first send, the endpoint answered `503`, and the partner's retry is how the event reaches analytics; the events table keeps one row per EventID (ADR 0007). A quarantined postback sends nothing. `offer_selected` is emitted only when selection returns an offer or `no_offer`; an entry that shows the quiz emits `prelander_viewed` alone. `offer_click.reason` is the click's reason, added so BigQuery can tell a Lead return transition from a first one without reading D1.
 
