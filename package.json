@@ -14,7 +14,9 @@
     "fmt:check": "oxfmt --check",
     "lint:docs": "node scripts/lint-docs.ts",
     "test": "vitest run",
-    "check": "pnpm typecheck && pnpm lint && pnpm fmt:check && pnpm lint:docs && pnpm test",
+    "state:check": "node scripts/state.ts check",
+    "stage:close": "node scripts/state.ts close",
+    "check": "pnpm typecheck && pnpm lint && pnpm fmt:check && pnpm lint:docs && pnpm state:check && pnpm test",
     "prepare": "git config core.hooksPath .githooks",
     "migrate:local": "wrangler d1 migrations apply facts --local && wrangler d1 migrations apply events --local",
     "migrate:remote": "wrangler d1 migrations apply facts --remote && wrangler d1 migrations apply events --remote"
