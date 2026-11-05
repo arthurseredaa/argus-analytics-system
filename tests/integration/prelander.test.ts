@@ -111,6 +111,14 @@ describe("GET /p/:prelander", () => {
     expect(html).toContain("No offer available");
   });
 
+  it("OFF-11 the offer link names the prelander and the visit, never an offer id", async () => {
+    const html = await (await getPath("/p/demo")).text();
+    expect(html).toContain(
+      '"/go?prelander=" + encodeURIComponent(prelander) + "&visit=" + encodeURIComponent(visit)',
+    );
+    expect(html).not.toContain("/go/");
+  });
+
   it("OFF-10 page script holds no catalog or selection logic", async () => {
     const html = await (await getPath("/p/demo")).text();
     for (const offer of (catalogJson as { offers: { name: string; url: string }[] }).offers) {

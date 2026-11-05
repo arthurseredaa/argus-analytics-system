@@ -44,7 +44,7 @@ When selection runs:
 
 - Q-1: option 1. A returning user without a Lead sees the prelander and an empty quiz. A user whose Leads are all for disabled or removed offers is handled by rule 3: normal selection, with the quiz skipped when the answers are sufficient. Whether the quiz should be prefilled goes to the company as part of Q-1; prefilling changes only the page, because the stored answers are in D1 either way.
 - Q-10: option 1. Among Leads for active offers, the one whose postback we accepted last wins. We use our own acceptance time, which every postback has, instead of the partner's registration time, which may be missing or set by a clock we do not control. Two Leads accepted at the same millisecond go to the higher EPU in the current catalog version, the same tie-break as rule 2 uses for revenue, and to the lower offer ID if the EPU is equal too, so the result is always determined. Arthur chose EPU over offer ID here: the case is rare, but when it happens it earns more.
-- Selection runs at entry and at completion, and the redirect endpoint (`/go/{offer}`) re-reads the offer's status in the current catalog version and runs selection again if the offer is no longer active (ADR 0003).
+- Selection runs at entry, at completion and at the redirect endpoint (`GET /go?prelander=&visit=`). The redirect takes no offer ID: it runs selection again for the cookie's user on every press, so nothing in the URL chooses the offer, and an offer turned off since the page was shown is never sent to (ADR 0003). The redirect records its result in `offer_click`, not in a second `offer_selected`.
 
 ### Shape of the selection code
 
@@ -59,7 +59,7 @@ select(facts, catalog, moment) -> { action, offerId, reason, catalogVersion }
 - `moment`: `entry`, `completion` or `redirect`.
 - `action`: `redirect`, `quiz` or `no_offer`; `reason`: `lead_return`, `best_epu`, `fallback_universal`, `no_offer` or `quiz_needed`.
 
-The caller reads the facts and the current catalog in one D1 batch, calls the function, and records the result and the catalog version in the `offer_selected` event (P-3). The steps inside the function run in a fixed order:
+The caller reads the facts and the current catalog in one D1 batch, calls the function, and records the result and the catalog version in the `offer_selected` event (P-3), or in `offer_click` at the redirect. The steps inside the function run in a fixed order:
 
 1. Drop offers the user may not be sent to. Empty today; the offer exclusion after Purchase (DES-5, Q-20) goes here as one filter over the candidates, and an excluded offer also stops giving a Lead redirect.
 2. Rule 1: Leads for active offers, most recent first, then higher EPU, then lower offer ID. If one exists, redirect to it.

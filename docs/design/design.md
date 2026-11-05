@@ -45,7 +45,7 @@ One Worker serves every endpoint:
 | `GET /p/{prelander}` | Sets the identity cookie, runs selection at entry, renders the quiz or answers `302` (Lead return, rule 3 skip) | reads in one batch; writes a click only when it redirects | `prelander_viewed`; on a redirect also `offer_selected`, `offer_click` |
 | `POST /api/events` | Takes one browser event, sends it to the Queue, answers `202` | none | the event |
 | `POST /api/complete` | Takes the answers and the email at the end of the quiz, runs selection, returns the offer | writes `users`, `user_answers`; reads Leads and the catalog | `quiz_completed`, `offer_selected` |
-| `GET /go/{offer}` | Re-checks the offer, stores the click, answers `302` with `click_id` | reads the catalog and the user's Leads; writes `clicks` | `offer_click` |
+| `GET /go?prelander=&visit=` | Runs selection again for the cookie's user, stores the click, answers `302` with `click_id` | reads in one batch; writes `clicks` | `offer_click` |
 | `POST /postback/v1/{partner}` | Checks the HMAC signature, finds the click, records the Lead or Purchase | writes `conversions` or `quarantine` | `lead`, `purchase` |
 | `GET /api/report?view=cohort\|postback`, page `/report` | The funnel report in two views, as JSON and as a page | reads clicks and conversions | none |
 | `GET /__probe` | Synthetic latency probe: the entry D1 batch for a user with no rows | reads only | none |
@@ -54,7 +54,7 @@ The facts the rules read sit in one D1 database ([ADR 0003](../adr/0003-operatio
 
 ### Where offer status is checked again
 
-Offer status lives in the versioned catalog. A change, such as turning an offer off, writes a new full catalog version in one transaction through a script, with no deploy. Status is read from the current version at entry, at completion and at `GET /go/{offer}`. If the offer was disabled between selection and the redirect, `/go` runs selection again and redirects to the new result, or shows the no-offer message (R-9). If it was disabled between a Lead and the return visit, the Lead gives no redirect: entry applies rule 3, which skips the quiz only when the answers are sufficient and then picks by rule 2 (OFF-9). A postback for a disabled offer is still counted, because the registration happened (Q-24).
+Offer status lives in the versioned catalog. A change, such as turning an offer off, writes a new full catalog version in one transaction through a script, with no deploy. Status is read from the current version at entry, at completion and at `GET /go`. The link names no offer, and `/go` runs selection on every press, so any catalog change made since the page was shown applies: an offer disabled in between is never sent to, and the press goes to the new result or shows the no-offer message (R-9). If it was disabled between a Lead and the return visit, the Lead gives no redirect: entry applies rule 3, which skips the quiz only when the answers are sufficient and then picks by rule 2 (OFF-9). A postback for a disabled offer is still counted, because the registration happened (Q-24).
 
 ### Alternatives
 

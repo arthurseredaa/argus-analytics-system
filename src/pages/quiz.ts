@@ -169,8 +169,9 @@ const SCRIPT = `${OUTBOX_SCRIPT}
       var box = document.querySelector("section[data-result='offer']");
       box.querySelector("[data-offer-name]").textContent = offer.name;
       box.querySelector("[data-offer-url]").textContent = offer.url;
+      // The link names no offer: /go selects again for this user when the button is pressed.
       box.querySelector("a").href =
-        "/go/" + encodeURIComponent(offer.offer_id) + "?prelander=" + encodeURIComponent(prelander);
+        "/go?prelander=" + encodeURIComponent(prelander) + "&visit=" + encodeURIComponent(visit);
       showResult("offer");
     }).catch(function () {
       error.hidden = false;

@@ -51,7 +51,7 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 | Prelander entry | `GET /p/{prelanderId}`. Sets the identity cookie, renders the quiz, or answers 302 for a lead return. Writes nothing to D1 for a new user. A lead return creates a new click row. | ADR 0002, ADR 0004 |
 | Event ingestion | `POST /api/events` with one event per request: `{"event_id","schema_version","type","client_time","visit_id","seq","prelander_id","payload"}`. The Worker adds `user_id` (from the cookie) and `received_at`. Answers 202. A body over 4 KB (4,096 bytes) gets `413`. An unknown envelope field or a server-only type such as `lead` gets `400`; `user_id` and `received_at` in the body are dropped, not rejected. Any key whose name contains `email` is removed from the payload before the Queue. Analytics only: a step event never writes D1. The envelope has no field for an email. | ADR 0005, `docs/design/data-model.md` |
 | Quiz completion and offer selection | `POST /api/complete` with `{"prelander_id":"demo","answers":{"gender":"women","ethnicity":"asia"},"email":"u1@example.com"}`, sent once after the email step. Creates the `users` row and writes the answers and the encrypted email to D1. Answers `{"offer_id","name","url","reason","catalog_version"}`. Replaces `POST /api/select`. The latest accepted answer is the completion request the server received last. A user who stops before the email step has no rows in D1. | ADR 0004, `docs/design/data-model.md` |
-| Transition | `GET /go/{offerId}`. Re-checks offer status, stores the click, answers 302 with the click id in the `Location` query. | ADR 0004, ADR 0007 |
+| Transition | `GET /go?prelander=&visit=`. Takes no offer ID: runs selection again for the cookie's user, stores the click, answers 302 with the click id in the `Location` query. Without answers or Leads it answers 302 to `/p/{prelander}` and stores nothing (Q-30). | ADR 0004, ADR 0007 |
 | Postback | `POST /postback/v1/{partner}` with JSON `{"click_id","type","transaction_id","occurred_at","payout?","currency?"}` and the header `X-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 over "t.body">`, per ADR 0007. | ADR 0007 |
 | Report | `GET /api/report?from=&to=&prelander=&offer=&view=cohort\|postback`, and the `/report` page. | stage 4 metrics |
 | Test state | `GET /__test/state`: the caller's user (from the cookie), that user's answers, events, clicks and conversions, and global counts including the quarantine. `POST /__test/reset`. `POST /__test/seed` acts on the caller's user with `{ "answers"?: {"gender":"women"}, "leads"?: [{"offer_id","accepted_at"?}], "clicks"?: [{"offer_id","created_at"?}] }`, for cases that are slow to reach through the UI, such as a Lead on 001 or a click dated yesterday. It answers `{"ok":true,"clicks":[<Lead click ids>,<plain click ids>]}`, or `400` for an offer id outside the current catalog. Leads without `accepted_at` are ordered by array position. All three answer `404` unless `TEST_ROUTES` is `on`. The deployed demo has it on (decision 1 of the stage 1 plan); a production deploy leaves it off. | ADR 0003 |
@@ -118,7 +118,7 @@ Automated: `pnpm test -- -t "QZ-4"`. Cases: `QZ-4 Q-4 latest completion received
 Manual:
 1. `answer $JAR gender women`, then `answer $JAR gender men`.
 2. Wait 35 seconds for the consumer, then `state $JAR`: the list of answer events, and no stored answers.
-3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET /go/{offerId}`, then wait 35 seconds for the consumer and `state $JAR` again.
+3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET $BASE/go?prelander=demo`, then wait 35 seconds for the consumer and `state $JAR` again.
 
 Expected: after step 2 both answer events are kept and D1 has no answers, because answers are stored only at completion. After step 3 the current gender answer is `men`: the completion request the server received last wins, and an earlier `client_time` or `seq` does not change that. The selection event has a reason code and a catalog version. The click row points to the same user and offer as the selection.
 
@@ -187,7 +187,7 @@ Depends on: ID-2, PB-4, OFF-3.
 Automated: `pnpm test -- -t "ID-3"`. Case: `ID-3 earlier user's email in a new browser gives no lead return`.
 
 Manual:
-1. User A (`a.jar`): `complete a.jar women asia user1@example.com` (003), `GET /go/003`, then `pnpm postback lead --click <A's click id> --txn T-A1`.
+1. User A (`a.jar`): `complete a.jar women asia user1@example.com` (003), `GET $BASE/go?prelander=demo`, then `pnpm postback lead --click <A's click id> --txn T-A1`.
 2. User B (`b.jar`, a new jar): `GET /p/demo`, then `complete b.jar women europe user1@example.com`.
 
 Expected: B gets 004 with reason `best_epu`. B's entry answers 200 with the quiz, not 302 to 003. A and B have different user ids.
@@ -279,7 +279,7 @@ Automated: `pnpm test -- -t "OFF-8"`. Cases: decision table rows 9 and 21. UI ca
 
 Manual: `pnpm offer set-status 007 inactive`, women + latam in the browser. Restore 007.
 
-Expected: `POST /api/complete` returns reason `no_offer` and no URL. The page shows `No offer available`. `GET /go/007` does not answer 302.
+Expected: `POST /api/complete` returns reason `no_offer` and no URL. The page shows `No offer available`. `GET $BASE/go?prelander=demo` with the same cookie answers 200 with `No offer available`, not 302.
 
 ### OFF-9 A Lead for a disabled offer gives no redirect right
 
@@ -308,10 +308,10 @@ Expected: the response has `name` and `url` of one offer and nothing about the o
 
 Depends on: ADR 0004, R-9.
 
-Automated: `pnpm test -- -t "OFF-11"`. Cases: `OFF-11 transition answers 302 with Location and click id`, `OFF-11 R-9 offer disabled after selection triggers a new selection`.
+Automated: `pnpm test -- -t "OFF-11"`. Cases: `OFF-11 transition answers 302 with Location and click id`, `OFF-11 R-9 offer disabled after selection is re-selected at /go`, `OFF-11 the URL cannot choose the offer`.
 
 Manual:
-1. `complete` with women + asia, then `curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/go/003`.
+1. `complete` with women + asia, then `curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' "$BASE/go?prelander=demo"`.
 2. `complete` again, `pnpm offer set-status 003 inactive`, repeat the curl. Restore 003.
 
 Expected: step 1 prints `302 https://asia-connect.example/?click_id=<random id>`. Step 2 prints a 302 to `https://asia-women.example` (001, the next best match). No request leaves for a `.example` host.
@@ -532,7 +532,7 @@ curl -s -c $JAR -b $JAR -o /dev/null -w '%{http_code}\n' $BASE/p/demo    # 200, 
 answer $JAR gender women                                                 # 202, analytics only, nothing in D1
 answer $JAR ethnicity asia                                               # 202
 complete $JAR women asia user1@example.com | jq -c '{offer_id,reason}'   # {"offer_id":"003","reason":"best_epu"}; email only in this body
-CLICK=$(curl -s -b $JAR -o /dev/null -w '%{redirect_url}' $BASE/go/003 | sed 's/.*click_id=//')
+CLICK=$(curl -s -b $JAR -o /dev/null -w '%{redirect_url}' "$BASE/go?prelander=demo" | sed 's/.*click_id=//')
 
 # DEMO-3: Lead for that click
 pnpm postback lead --click $CLICK --txn DEMO-L1                          # 200
@@ -754,7 +754,7 @@ Depends on: metrics document (p95 targets, set in stage 4 per nfr.md), R-18.
 Automated: none, a measurement.
 
 Manual:
-1. `k6 run -e BASE=$BASE --summary-export $TMP/steady.json load/steady.js` at the average rate, covering `GET /p/demo`, `POST /api/complete`, `GET /go/{offerId}` and `POST /api/events`.
+1. `k6 run -e BASE=$BASE --summary-export $TMP/steady.json load/steady.js` at the average rate, covering `GET /p/demo`, `POST /api/complete`, `GET /go?prelander=demo` and `POST /api/events`.
 2. Read p95 per endpoint from `steady.json`, and from the Workers analytics in the Cloudflare dashboard for the same window.
 3. Read the p95 values from the `load/peak.js` run in NFR-2.
 4. Note where k6 ran from. If the design names more than one region (NFR-7), run step 1 from each.

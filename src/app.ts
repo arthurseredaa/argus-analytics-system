@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import type { Flow } from "./domain/flow.ts";
 import { completeRoute } from "./routes/complete.ts";
 import { eventsRoute } from "./routes/events.ts";
+import { goRoute } from "./routes/go.ts";
 import { identity } from "./routes/identity.ts";
 import { prelanderRoute } from "./routes/prelander.ts";
 import { testRoute } from "./routes/test.ts";
@@ -20,11 +21,13 @@ export function createApp(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
 
   app.use("/p/*", identity());
   app.use("/api/*", identity());
+  app.use("/go/*", identity());
   app.use("/__test/*", identity());
 
   app.route("/api", completeRoute(flows));
   app.route("/api", eventsRoute(flows));
   app.route("/p", prelanderRoute(flows));
+  app.route("/go", goRoute(flows));
   app.route("/__test", testRoute());
 
   // Names the error class only: a message can carry request data such as an email.
