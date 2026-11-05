@@ -7,6 +7,7 @@ Paid test assignment for Unicorn Pro (Senior Full-Stack Engineer, AI & Automatio
 - Talk to the user in Ukrainian.
 - Everything committed to the repo (docs, ADRs, README, code comments, commit messages) is in English. The one exception is `docs/requirements/open-questions.md`, which is in Ukrainian since it goes to the company unchanged.
 - Use the `humanizer` skill for every piece of prose that goes into the repo.
+- Use the `plain-tech-report` skill for chat replies to the user that report on finished or partly finished work or explain a technical concept, cause or mechanism. It is for chat, not for repo files.
 
 ## Where things live
 
