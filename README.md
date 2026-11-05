@@ -25,6 +25,14 @@ pnpm check
 
 `pnpm check` runs everything CI runs: typecheck, lint, format check, docs lint and tests. `pnpm typecheck` generates `worker-configuration.d.ts` first, so it works on a fresh checkout.
 
+```sh
+pnpm migrate:local
+pnpm seed --local
+pnpm test:browser
+```
+
+`pnpm test:browser` starts `wrangler dev` and drives the quiz in Chromium. It needs the local databases migrated and seeded and a `.dev.vars` copied from the example. It proves that the page's own JavaScript sends the eight events and that the email reaches only the completion request; the local state and the wrangler log are then scanned for it.
+
 `pnpm install` wires `pnpm check` as the git pre-commit hook. `git commit --no-verify` skips it and is not used in this repository.
 
 ## Deploy
