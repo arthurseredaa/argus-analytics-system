@@ -11,7 +11,7 @@
     "test:email-scan": "bash scripts/email-scan.sh",
     "types": "wrangler types --strict-vars=false --env-file /dev/null",
     "typecheck": "wrangler types --strict-vars=false --env-file /dev/null && tsc --noEmit && tsc --noEmit -p scripts/tsconfig.json && tsc --noEmit -p tests/e2e/tsconfig.json",
-    "lint": "oxlint --deny-warnings src tests scripts",
+    "lint": "oxlint --deny-warnings src tests scripts playwright.config.ts",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "lint:docs": "node scripts/lint-docs.ts",

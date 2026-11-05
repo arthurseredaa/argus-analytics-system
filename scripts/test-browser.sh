@@ -18,7 +18,7 @@ if (exec 3<>/dev/tcp/127.0.0.1/8787) 2>/dev/null; then
 fi
 
 LOG="${TMPDIR:-/tmp}/wrangler-dev-$$.log"
-pnpm exec wrangler dev --port 8787 >"$LOG" 2>&1 &
+pnpm exec wrangler dev --port 8787 >"$LOG" 2>&1 </dev/null &
 WRANGLER_PID=$!
 
 # set -m gives the background job its own process group, so one signal reaches pnpm, wrangler and workerd.

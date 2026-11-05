@@ -47,8 +47,7 @@
       "Bash(pnpm lint)",
       "Bash(pnpm lint:docs)",
       "Bash(pnpm fmt:check)",
-      "Bash(pnpm state:check)",
-      "Bash(herdr agent list)"
+      "Bash(pnpm state:check)"
     ]
   }
 }

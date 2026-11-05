@@ -54,7 +54,10 @@ test("QZ-1 ID-4 R-12 a visitor takes the quiz, gets Asia Connect, and the email 
   expect(state).toBeDefined();
   // The API lists events by arrival, then seq. Only the browser numbers its events (1 to 5); server events have seq null.
   const events = state?.me.events ?? [];
-  expect(events.map((e) => e.type)).toEqual(EXPECTED_TYPES);
+  // quiz_completed and offer_selected share one received_at and both have seq null, so their relative order is undefined.
+  const types = events.map((e) => e.type);
+  expect(types.slice(0, 6)).toEqual(EXPECTED_TYPES.slice(0, 6));
+  expect(types.slice(6).toSorted()).toEqual(["offer_selected", "quiz_completed"]);
   expect(events.map((e) => e.seq)).toEqual([null, 1, 2, 3, 4, 5, null, null]);
   for (const e of events) expect(e.visit_id).toBe(visit);
 
@@ -66,7 +69,7 @@ test("QZ-1 ID-4 R-12 a visitor takes the quiz, gets Asia Connect, and the email 
     expect(r.url).not.toContain(ENCODED);
   }
   // Exactly one request carries the address: the completion POST.
-  const withEmail = requests.filter((r) => r.body.includes(EMAIL));
+  const withEmail = requests.filter((r) => r.body.includes(EMAIL) || r.body.includes(ENCODED));
   expect(withEmail.map((r) => `${r.method} ${new URL(r.url).pathname}`)).toEqual([
     "POST /api/complete",
   ]);

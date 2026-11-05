@@ -41,7 +41,7 @@ if [ "$tool" = "Bash" ]; then
     if [ -f "$path" ] && has_ext "$path"; then
       files+=("$path")
     fi
-  done < <(git status --porcelain=v1 -z -uall 2>/dev/null)
+  done < <(git --no-optional-locks status --porcelain=v1 -z -uall 2>/dev/null)
 else
   if [ -z "$file" ] || [ ! -f "$file" ]; then
     exit 0

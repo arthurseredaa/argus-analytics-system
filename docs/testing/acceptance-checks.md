@@ -15,13 +15,11 @@ If a card cannot pass because the design changed, fix the card in the same commi
 
 ## Regression gate
 
-Run after every card. All four must pass. Commands are provisional until the project is set up (stage 6 of [part1-design-document.md](../plans/part1-design-document.md)).
+Run after every card. `pnpm check` must pass (typecheck, lint, format check, docs lint, state check and tests). So must `pnpm test:browser` against a local `wrangler dev`, which ends with the email scan over the wrangler log and the local state.
 
 ```sh
-pnpm typecheck
-pnpm lint            # oxlint, oxfmt --check
-pnpm test            # vitest with the Cloudflare Workers pool, unit and integration
-pnpm test:email-scan # R-12: runs the demo with a synthetic email, asserts it is absent from logs, URLs, Queue messages, R2 files and the events table
+pnpm check
+pnpm test:browser
 ```
 
 ## Conventions
