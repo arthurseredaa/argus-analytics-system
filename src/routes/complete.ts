@@ -1,5 +1,5 @@
 // Route: POST /api/complete, the quiz completion.
-// Implements ADR 0002, ADR 0004 and "Quiz completion" of data-model.md; serves ID-1, QZ-1 to QZ-4, OFF-2, OFF-10, DEMO-8, R-12.
+// Implements ADR 0002, ADR 0004 and "Quiz completion" of data-model.md; serves ID-1, QZ-1 to QZ-4, OFF-2, OFF-10, DEMO-8, NFR-4, R-12.
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app.ts";
@@ -7,6 +7,8 @@ import { completeQuiz } from "../db/facts.ts";
 import { ConfigError, emailHash, encrypt, importAesKey, importHmacKey } from "../domain/crypto.ts";
 import { validateAnswers, type Flow } from "../domain/flow.ts";
 import { select } from "../domain/select.ts";
+import { isValidVisitId, makeServerEvent } from "../events/envelope.ts";
+import { emitInBackground } from "../events/producer.ts";
 
 const bodySchema = z.object({
   prelander_id: z.string(),
@@ -95,6 +97,29 @@ export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
 
     const selection = select(read.facts, read.catalog, "completion");
     const offer = read.catalog.offers.find((o) => o.id === selection.offerId);
+    const base = {
+      userId: c.get("userId"),
+      // A malformed id would make a poison Queue message, so the Worker makes one instead.
+      visitId:
+        body.visit_id !== undefined && isValidVisitId(body.visit_id)
+          ? body.visit_id
+          : crypto.randomUUID(),
+      prelanderId: body.prelander_id,
+      now: Date.now(),
+    };
+    emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [
+      makeServerEvent({ ...base, type: "quiz_completed", payload: { answers: checked.answers } }),
+      makeServerEvent({
+        ...base,
+        type: "offer_selected",
+        payload: {
+          offer_id: offer?.id ?? null,
+          reason: selection.reason,
+          moment: "completion",
+          catalog_version: selection.catalogVersion,
+        },
+      }),
+    ]);
     return c.json({
       offer_id: offer?.id ?? null,
       name: offer?.name ?? null,

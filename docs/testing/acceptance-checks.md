@@ -41,7 +41,7 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 | Purpose | Request | Fixed by |
 |---|---|---|
 | Prelander entry | `GET /p/{prelanderId}`. Sets the identity cookie, renders the quiz, or answers 302 for a lead return. Writes nothing to D1 for a new user. A lead return creates a new click row. | ADR 0002, ADR 0004 |
-| Event ingestion | `POST /api/events` with one event per request: `{"event_id","schema_version","type","client_time","visit_id","seq","prelander_id","payload"}`. The Worker adds `user_id` (from the cookie) and `received_at`. Answers 202. Analytics only: a step event never writes D1. The envelope has no field for an email. | ADR 0005, `docs/design/data-model.md` |
+| Event ingestion | `POST /api/events` with one event per request: `{"event_id","schema_version","type","client_time","visit_id","seq","prelander_id","payload"}`. The Worker adds `user_id` (from the cookie) and `received_at`. Answers 202. A body over 4 KB (4,096 bytes) gets `413`. An unknown envelope field or a server-only type such as `lead` gets `400`; `user_id` and `received_at` in the body are dropped, not rejected. Any key whose name contains `email` is removed from the payload before the Queue. Analytics only: a step event never writes D1. The envelope has no field for an email. | ADR 0005, `docs/design/data-model.md` |
 | Quiz completion and offer selection | `POST /api/complete` with `{"prelander_id":"demo","answers":{"gender":"women","ethnicity":"asia"},"email":"u1@example.com"}`, sent once after the email step. Creates the `users` row and writes the answers and the encrypted email to D1. Answers `{"offer_id","name","url","reason","catalog_version"}`. Replaces `POST /api/select`. The latest accepted answer is the completion request the server received last. A user who stops before the email step has no rows in D1. | ADR 0004, `docs/design/data-model.md` |
 | Transition | `GET /go/{offerId}`. Re-checks offer status, stores the click, answers 302 with the click id in the `Location` query. | ADR 0004, ADR 0007 |
 | Postback | `POST /postback/v1/{partner}` with JSON `{"click_id","type","transaction_id","occurred_at","payout?","currency?"}` and the header `X-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 over "t.body">`, per ADR 0007. | ADR 0007 |
@@ -55,9 +55,10 @@ Shell helpers used by the cards:
 ```sh
 state() { curl -s -b "$1" "$BASE/__test/state" | jq -S .; }
 snap()  { { state "$JAR"; curl -s "$BASE/api/report" | jq -S .; } > "$1"; }
-answer() { # answer <jar> <type> <value> [seq]: one event per request, analytics only
-  curl -s -b "$1" -c "$1" -X POST "$BASE/api/events" -H 'content-type: application/json' \
-    -d "{\"event_id\":\"$(uuidgen)\",\"schema_version\":1,\"type\":\"$2\",\"client_time\":\"$(date -u +%FT%TZ)\",\"visit_id\":\"v1\",\"seq\":${4:-1},\"prelander_id\":\"demo\",\"payload\":{\"value\":\"$3\"}}"
+answer() { # answer <jar> <question_key> <value> [seq]: one step_answered event, analytics only
+  step=$([ "$2" = gender ] && echo 1 || echo 2)
+  curl -s -b "$1" -c "$1" -o /dev/null -w '%{http_code}\n' -X POST "$BASE/api/events" -H 'content-type: application/json' \
+    -d "{\"event_id\":\"$(uuidgen | tr A-Z a-z)\",\"schema_version\":1,\"type\":\"step_answered\",\"client_time\":$(date +%s)000,\"visit_id\":\"v1\",\"seq\":${4:-1},\"prelander_id\":\"demo\",\"payload\":{\"step\":$step,\"question_key\":\"$2\",\"value\":\"$3\"}}"
 }
 complete() { # complete <jar> <gender> <ethnicity> <email>: the only call that writes answers and email to D1
   curl -s -b "$1" -c "$1" -X POST "$BASE/api/complete" -H 'content-type: application/json' \
@@ -84,8 +85,8 @@ Automated: `pnpm test -- -t "QZ-1"`. Cases: `QZ-1 accepts women`, `QZ-1 accepts 
 
 Manual:
 1. Open `$BASE/p/demo` in a browser. Step 1 offers two answers, women and men, and the wording asks who the user is looking for, not the user's own gender.
-2. `answer $JAR quiz_step1 women`, then `state $JAR`.
-3. `answer $JAR quiz_step1 robots`, then `state $JAR`.
+2. `answer $JAR gender women`, wait 35 seconds for the consumer, then `state $JAR`.
+3. `answer $JAR gender robots`, wait 35 seconds, then `state $JAR`.
 4. `complete $JAR women asia user1@example.com`, then `state $JAR`.
 5. With a new jar, `complete $JAR2 robots asia user2@example.com`, then `state $JAR2`.
 
@@ -99,7 +100,7 @@ Automated: `pnpm test -- -t "QZ-2"`. Cases: `QZ-2 wording after women`, `QZ-2 wo
 
 Manual:
 1. In a fresh browser profile, answer women at step 1 and read the step 2 question. Repeat with men.
-2. `answer $JAR quiz_step2 africa`, then `complete $JAR women africa user1@example.com`, then `state $JAR`.
+2. `answer $JAR ethnicity africa`, then `complete $JAR women africa user1@example.com`, then `state $JAR`.
 
 Expected: the two step 2 questions differ in wording and offer the same three values, stored at completion as `asia`, `europe` and `latam`. The unknown value gets 400 in both calls and is not stored (offer-selection.md, "Unknown answer value").
 
@@ -123,9 +124,9 @@ Depends on: ADR 0005, `docs/design/data-model.md` (event catalog).
 Automated: `pnpm test -- -t "QZ-4"`. Cases: `QZ-4 Q-4 latest completion received wins`, `QZ-4 R-10 two tabs complete in turn`, `QZ-4 answer events do not change D1`, `QZ-4 offer_selected carries reason and catalog version`, `QZ-4 click links to its selection, user and offer`.
 
 Manual:
-1. `answer $JAR quiz_step1 women`, then `answer $JAR quiz_step1 men`.
-2. `state $JAR`: the list of answer events, and no stored answers.
-3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET /go/{offerId}`, then `state $JAR` again.
+1. `answer $JAR gender women`, then `answer $JAR gender men`.
+2. Wait 35 seconds for the consumer, then `state $JAR`: the list of answer events, and no stored answers.
+3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET /go/{offerId}`, then wait 35 seconds for the consumer and `state $JAR` again.
 
 Expected: after step 2 both answer events are kept and D1 has no answers, because answers are stored only at completion. After step 3 the current gender answer is `men`: the completion request the server received last wins, and an earlier `client_time` or `seq` does not change that. The selection event has a reason code and a catalog version. The click row points to the same user and offer as the selection.
 
@@ -536,8 +537,8 @@ JAR=$TMP/demo.jar
 
 # DEMO-2: new user, quiz, offer
 curl -s -c $JAR -b $JAR -o /dev/null -w '%{http_code}\n' $BASE/p/demo    # 200, quiz
-answer $JAR quiz_step1 women                                             # analytics only, nothing in D1
-answer $JAR quiz_step2 asia
+answer $JAR gender women                                                 # 202, analytics only, nothing in D1
+answer $JAR ethnicity asia                                               # 202
 complete $JAR women asia user1@example.com | jq -c '{offer_id,reason}'   # {"offer_id":"003","reason":"best_epu"}; email only in this body
 CLICK=$(curl -s -b $JAR -o /dev/null -w '%{redirect_url}' $BASE/go/003 | sed 's/.*click_id=//')
 
@@ -788,10 +789,10 @@ Automated: `pnpm test -- -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. Extra case owned by 
 
 Manual:
 1. Run the AN-5, NFR-4 and NFR-5 manual steps.
-2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit (`answer $JAR quiz_step1 women 2`, then `answer $JAR quiz_step1 men 1`), then `state $JAR`. Then send two `complete` calls in turn and `state $JAR` again.
+2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit (`answer $JAR gender women 2`, then `answer $JAR gender men 1`), wait 35 seconds for the consumer, then `state $JAR`. Then send two `complete` calls in turn and `state $JAR` again.
 3. Check that the README section on known limitations lists these tests by name as the evidence.
 
-Expected: all listed tests pass. In step 2 both events are stored, ordered by `seq`, and D1 holds no answers until `complete`; after the two calls the one received last is current (seq orders events, not answers). The README shows how each behaviour was verified.
+Expected: all listed tests pass. In step 2 both events are stored and listed in arrival order, and `seq` orders them within the visit for analytics; D1 holds no answers until `complete`; after the two calls the one received last is current (seq orders events, not answers). The README shows how each behaviour was verified.
 
 ### A-4 Rule facts are visible to selection within seconds
 

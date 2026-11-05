@@ -1,6 +1,7 @@
 // Domain: the quiz flow as data, with its parser and pure walking functions.
 // Implements the "Quiz flow" decision of docs/plans/part2-mvp-stages.md (no ADR: reversible); serves QZ-1, QZ-2, QZ-7.
 import { z } from "zod";
+import { ID_PATTERN } from "../events/envelope.ts";
 
 export type Condition = { if: string } | { some: readonly Condition[] } | { not: Condition };
 
@@ -74,6 +75,10 @@ export function parseFlow(json: unknown): Flow {
     throw new Error(`invalid flow at ${path}: ${issue?.message ?? "invalid"}`);
   }
   const flow = parsed.data as Flow;
+  // The id goes into every event envelope, so it has to pass the envelope's own id check.
+  if (!ID_PATTERN.test(flow.prelander)) {
+    fail("prelander", "the id may only hold letters, digits, _ and -, at most 64 characters");
+  }
 
   const keys = new Set<string>();
   flow.steps.forEach((step, i) => {

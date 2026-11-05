@@ -131,6 +131,12 @@ describe("quiz flow", () => {
   it("QZ-7 a flow whose next names a missing step is rejected", () => {
     expect(() => parseFlow(withStep("gender", { next: "nowhere" }))).toThrow(/steps\[0\]\.next/);
   });
+  it("QZ-7 a flow whose prelander id breaks the event id pattern is rejected", () => {
+    for (const prelander of ["demo.v2", "demo v2", "a".repeat(65)]) {
+      expect(() => parseFlow({ ...demoJson, prelander })).toThrow(/prelander/);
+    }
+    expect(parseFlow({ ...demoJson, prelander: "demo_v2-b" }).prelander).toBe("demo_v2-b");
+  });
   it("QZ-7 a flow with a cycle is rejected", () => {
     const looping = withStep("ethnicity", {
       next: { branches: [{ when: { if: "asia" }, goto: "gender" }], otherwise: "email" },

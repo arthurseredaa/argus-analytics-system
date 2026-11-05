@@ -2,12 +2,18 @@ import { env } from "cloudflare:test";
 import { describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.ts";
 import { prelanderFlows } from "../../src/domain/prelanders.ts";
+import { storedEvent, deliver } from "../fixtures/events.ts";
 import { getPath, newCookie, postComplete } from "../fixtures/http.ts";
 
 type State = {
-  me: { user_id: string; user: { email_hash: string } | null; answers: Record<string, unknown> };
+  me: {
+    user_id: string;
+    user: { email_hash: string } | null;
+    answers: Record<string, unknown>;
+    events: { event_id: string; type: string; seq: number | null }[];
+  };
   catalog: { version: number; offers: number };
-  counts: { users: number; clicks: number; conversions: number };
+  counts: { users: number; clicks: number; conversions: number; events: number };
   partner_secrets_ok: boolean;
 };
 
@@ -30,6 +36,18 @@ describe("test routes", () => {
     expect(state.me.user_id).toBe(cookie.slice(4));
     expect(state.me.user).toBeNull();
     expect(state.me.answers).toEqual({});
+  });
+
+  it("ID-4 test state lists the caller's events", async () => {
+    const cookie = newCookie();
+    const userId = cookie.slice(4);
+    const later = storedEvent({ user_id: userId, seq: 2, received_at: 1762300000000 });
+    const earlier = storedEvent({ user_id: userId, seq: 1, received_at: 1762300000000 });
+    await deliver([later, earlier]);
+    const state = (await (await getPath("/__test/state", cookie)).json()) as State;
+    expect(state.me.events.map((e) => e.seq)).toEqual([1, 2]);
+    expect(state.me.events.map((e) => e.event_id)).toEqual([earlier.event_id, later.event_id]);
+    expect(state.counts.events).toBeGreaterThanOrEqual(2);
   });
 
   it("R-12 test state never shows the email or its ciphertext", async () => {

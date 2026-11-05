@@ -2,16 +2,15 @@
 // The folders under src/ are its modules, not separate deployables.
 import { createApp } from "./app.ts";
 import { prelanderFlows } from "./domain/prelanders.ts";
+import { consumeEvents } from "./events/consumer.ts";
 
 export const app = createApp(prelanderFlows);
 
 export default {
   fetch: app.fetch,
 
-  // Placeholder until stage 2. Retrying keeps any stray message instead of acking it.
-  async queue(batch) {
-    console.log(JSON.stringify({ msg: "queue batch", size: batch.messages.length }));
-    batch.retryAll();
+  async queue(batch, env) {
+    await consumeEvents(batch, env.EVENTS);
   },
 
   async scheduled(controller) {

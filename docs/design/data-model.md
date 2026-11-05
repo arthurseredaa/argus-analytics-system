@@ -299,7 +299,7 @@ The email exists only in the body of `POST /api/complete` and, after that, in `u
 - `email_enc`: AES-GCM with a random IV, under a master key kept in a Worker secret. A database export or a Time Travel restore holds ciphertext only.
 - `email_hash`: HMAC-SHA256 of the normalised email under a second, separate key, used for lookups. Without the key the hash cannot be checked against a list of known emails.
 
-The event envelope has no field for the email, so `POST /api/events` cannot carry it as a field. As a backstop, the Worker validates the payload of every known event type (`step_answered` values must be allowed values from the question catalog) and rejects any event whose body contains a string shaped like an email address, logging the rejection without the value.
+The event envelope has no field for the email, so `POST /api/events` cannot carry it as a field. As a backstop, the Worker validates the payload of every known event type (`step_answered` values must be allowed values from the question catalog). For every event, the producer also removes each payload key whose name contains `email`, at any depth, and logs how many it removed without any value, instead of rejecting the event. An email inside a string value, such as a page URL with `?email=`, is not removed: that is the accepted risk R-23.
 
 The email must never appear in:
 
