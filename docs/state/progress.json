@@ -1,7 +1,7 @@
 {
   "$schema": "./progress.schema.json",
   "plan": "docs/plans/part2-mvp-stages.md",
-  "updated": "2026-11-04",
+  "updated": "2026-11-05",
   "stages": [
     {
       "id": 0,
@@ -22,12 +22,15 @@
     {
       "id": 2,
       "title": "Events",
-      "status": "next"
+      "status": "done",
+      "notes": "Built through subagent-driven development from docs/plans/part2-stage-2-events.md: five tasks, a review per task, a final whole-branch review and one fix wave, then one change by Arthur after the review. Decisions by Arthur: (1) an email inside an event payload: the producer's sanitizePayload() removes every payload key whose name contains email, at any depth, and leaves string values alone; an email inside a string of an unknown type is the accepted risk R-23; (2) the browser outbox drops an unsent event older than one day by its client_time. Rulings during the build: the test plugin reports per-message retries as retryMessages, so the tests follow it instead of the plan's explicitRetries. Defects the reviews found and fixed: a malformed visit_id from the completion body produced Queue messages that could never be stored (now replaced by a Worker UUID); a payload nested about 1000 levels passed the edge, failed json_valid in D1 and sent the whole batch to the dead letter queue (now capped at 32 levels at the edge and in the stored schema); a HEAD request counted as an entry; the outbox waited for the next event to retry (now a 30-second timer); a prelander id outside the id pattern was accepted from the config. Explain-back: Arthur followed one step_answered from the outbox through the Worker checks, the Queue and the consumer into D1, and asked what producer.ts is for; the duplicate and the Queue-down cases were walked through with him. Deferred: a body cap enforced while the body streams, before c.req.text(); a row-by-row fallback when a batch insert fails (the consumer is replaced in stage 5); server events are lost with a log line when the Queue refuses, until the R2 fallback of stage 5.",
+      "closed": "2026-11-05",
+      "verified": "pnpm typecheck && pnpm lint && pnpm fmt:check && pnpm test (217 passed, 20 files); pnpm test -t \"TEST-3|ID-1|ID-2|ID-4|BIZ-2|QZ-4|QZ-5|NFR-4|NFR-5|NFR-8|R-12|R-14|R-23\" (100 passed); against wrangler dev one visit through completion stored 8 events and no test email in logs or state; Arthur ran the browser flow locally. The same body twice and the 8 events of a browser visit are checked against BASE right after this commit deploys."
     },
     {
       "id": 3,
       "title": "Redirect, postbacks and the Lead return",
-      "status": "pending"
+      "status": "next"
     },
     {
       "id": 4,

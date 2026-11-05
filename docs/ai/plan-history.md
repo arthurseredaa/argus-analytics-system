@@ -85,3 +85,12 @@ Stage 6 of `docs/plans/part1-design-document.md` produced `docs/plans/part2-mvp-
 - design.md section 10 and data-model.md now describe the fourth quiz question as a new step in the prelander's flow config, with no page code change and no migration.
 
 The Part 1 schedule is not updated; it ended on 2026-11-02 and the dates in the Part 2 plan replace it.
+
+## 2026-11-05: email keys removed from event payloads, a one-day limit on the outbox
+
+Stage 2 of `docs/plans/part2-mvp-stages.md` said no content filter was needed on events, because the strict envelope has no field for an email. Writing the stage plan showed a gap: the payload of an unknown event type or an unknown `schema_version` is stored as sent (ADR 0005), so a later client release could put an email into it. Arthur made two calls in the session.
+
+- The producer runs `sanitizePayload()` on every event, browser and server, before the Queue send. It removes every payload key whose name contains `email`, in any case and at any depth, and logs the event type and the number of removed keys. String values are left as they are, so an email inside a string of an unknown type still passes; that is the accepted risk R-23 in `risks.md`. The AI proposed answering `400` for such an event, and then also replacing email-shaped substrings in string values; Arthur chose removing keys only. The session is drafted as `docs/ai/examples/09-email-in-event-payload.md`.
+- The browser outbox drops an unsent event older than one day by its `client_time`. The outbox is there for short outages, and an event that arrives days late lands after the report for its day was counted.
+
+The stage 2 text of `part2-mvp-stages.md`, `docs/design/data-model.md` ("Personal data") and the stage 2 plan now say this. No stage was added or moved.

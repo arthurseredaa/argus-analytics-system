@@ -126,7 +126,7 @@ Automated: `pnpm test -- -t "QZ-4"`. Cases: `QZ-4 Q-4 latest completion received
 Manual:
 1. `answer $JAR gender women`, then `answer $JAR gender men`.
 2. Wait 35 seconds for the consumer, then `state $JAR`: the list of answer events, and no stored answers.
-3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET /go/{offerId}`, then `state $JAR` again.
+3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET /go/{offerId}`, then wait 35 seconds for the consumer and `state $JAR` again.
 
 Expected: after step 2 both answer events are kept and D1 has no answers, because answers are stored only at completion. After step 3 the current gender answer is `men`: the completion request the server received last wins, and an earlier `client_time` or `seq` does not change that. The selection event has a reason code and a catalog version. The click row points to the same user and offer as the selection.
 
@@ -789,7 +789,7 @@ Automated: `pnpm test -- -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. Extra case owned by 
 
 Manual:
 1. Run the AN-5, NFR-4 and NFR-5 manual steps.
-2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit (`answer $JAR gender women 2`, then `answer $JAR gender men 1`), then `state $JAR`. Then send two `complete` calls in turn and `state $JAR` again.
+2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit (`answer $JAR gender women 2`, then `answer $JAR gender men 1`), wait 35 seconds for the consumer, then `state $JAR`. Then send two `complete` calls in turn and `state $JAR` again.
 3. Check that the README section on known limitations lists these tests by name as the evidence.
 
 Expected: all listed tests pass. In step 2 both events are stored and listed in arrival order, and `seq` orders them within the visit for analytics; D1 holds no answers until `complete`; after the two calls the one received last is current (seq orders events, not answers). The README shows how each behaviour was verified.
