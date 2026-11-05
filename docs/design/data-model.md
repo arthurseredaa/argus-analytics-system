@@ -32,11 +32,11 @@ These points refine the ADRs. Where the wording differs, this file is the curren
 | Request | Reads in D1 | Writes in D1 | Events emitted |
 |---|---|---|---|
 | `GET /p/{prelander}`, no cookie | nothing | nothing | `prelander_viewed` (`quiz`) |
-| `GET /p/{prelander}`, with cookie | `users`, `user_answers`, `conversions` joined with `clicks`, current `offers` | `clicks` when entry selection redirects | `prelander_viewed`; on a redirect also `offer_selected` (`entry`) and `offer_click` |
+| `GET /p/{prelander}`, with cookie | `users`, `user_answers`, `conversions` joined with `clicks`, current `offers` | `clicks` when entry selection redirects | `prelander_viewed`; when entry selection returns an offer or `no_offer` also `offer_selected` (`entry`), and on a redirect `offer_click` |
 | `POST /api/events` | nothing | nothing | the one event in the body |
 | `POST /api/complete` | `conversions` joined with `clicks`, current `offers` | `users`, `user_answers` | `quiz_completed`, `offer_selected` (`completion`) |
-| `GET /go/{offer}` | current `offers`, the user's Leads; on re-selection also the answers | `clicks` | `offer_click`; on re-selection also `offer_selected` (`redirect`) |
-| `POST /postback/v1/{partner}` | `partners`, `clicks`, `offers` of the click's version | `conversions`, or `quarantine` | `lead` or `purchase` when accepted |
+| `GET /go?prelander=&visit=` | `users`, `user_answers`, `conversions` joined with `clicks`, current `offers` | `clicks` when selection returns an offer | `offer_click` when a click is written |
+| `POST /postback/v1/{partner}` | `partners`, `clicks`, `offers` of the click's version | `conversions`, or `quarantine` | `lead` or `purchase` when accepted or duplicate |
 | Cleanup job, daily | `users`, `clicks`, `conversions` | deletes from `users`, `user_answers`, `clicks` | none |
 
 Entry for a user with a cookie reads the facts in one D1 batch. A cookie without a `users` row (a user who left before completion) finds nothing and gets the quiz. An existing user without any Lead also gets an empty quiz (Q-1, ADR 0004). A user whose Leads are all for disabled offers and whose answers are sufficient skips the quiz under rule 3 (OFF-9), so entry can redirect with reason `best_epu` or `fallback_universal` as well as `lead_return`.
@@ -165,7 +165,7 @@ CREATE TABLE offers (
 
 - Put there by ADR 0003. Version 1 is the spec's catalog of seven offers, all active (OFF-1).
 - Every version is a full copy of all offers (P-3). The catalog script inserts the `catalog_history` row and the copied offer rows, with the change applied, in one D1 batch, so selection never sees half a version. If two scripts run at the same time, both try to insert the same version number and the primary key rejects the second one.
-- Read at entry, at completion and at `/go/{offer}` (current version), and by the postback endpoint (the version recorded on the click).
+- Read at entry, at completion and at `/go` (current version), and by the postback endpoint (the version recorded on the click).
 - A full copy per version instead of a diff: with seven offers a version is a few kilobytes, and reading the catalog that explains a past redirect is `WHERE version = ?` with nothing to replay. A diff would make every read of an old version rebuild it from the history.
 - `kind` is a column instead of being derived from `ethnicity = 'any'`: the universal offer has a different rule (it is used only when nothing specialised matches and never competes on EPU, OFF-6, OFF-7), and a rule should not hang on a data value that someone may later reuse for an ordinary offer. Q-7 asks whether there can be more than one universal offer; with a column, the answer is a data change.
 
@@ -188,7 +188,7 @@ CREATE INDEX clicks_user ON clicks (user_id);
 
 - Put there by ADR 0003 and ADR 0007 (P-2). The composite key to `offers` also ties the click to a row of `catalog_history`, through `offers.version`.
 - Written in two places, always before the `302` is sent (R-6):
-  - `GET /go/{offer}?prelander=P1&visit=V1`. The Worker re-reads the offer in the current catalog version. If it is active, the click is written for it. Its reason is `lead_return` when the user has a Lead for this offer (a Lead that arrived while the quiz was open makes completion return `lead_return`), otherwise `best_epu` for a specialised offer and `fallback_universal` for the universal one. If it is no longer active, selection runs again (R-9, OFF-9), the click is written for the new result with that result's reason, and `offer_selected` with moment `redirect` is emitted. If the new result is `no_offer`, no click is written and the page shows the no-offer message (OFF-8).
+  - `GET /go?prelander=P1&visit=V1`, when the user presses the offer button. The URL names no offer. The Worker reads the user's facts and the current catalog version in one batch and runs `select()` again (decision 1 of the [stage 3 plan](../plans/part2-stage-3-redirect-postbacks.md)), so nothing in the link can choose the offer. The click is written for the result, and its reason is the selection's reason: `lead_return`, `best_epu` or `fallback_universal`. An offer turned off since the page was shown is never sent to, because the press gets the new result (R-9, OFF-9). No second `offer_selected` is emitted: `offer_click` carries the offer, the catalog version and the reason. If the result is `no_offer`, no click is written and the page shows the no-offer message (OFF-8). A user without answers or Leads, such as a new cookie, gets a `302` to `/p/{prelander}` and no click (Q-30).
   - `GET /p/{prelander}`, when entry selection redirects. A Lead return is a new transition with a new click ID (Q-21). The same applies to a rule 3 redirect at entry.
 - `click_id` carries at least 128 random bits (the IDs in this file are shortened for reading). The partner gets it in the redirect URL, under the parameter name the partner supports (Q-6), and sends it back in the postback. The UserID never leaves the system (ADR 0002, R-11, R-12).
 - `prelander_id` and `visit_id` are on the click so that a Lead or Purchase can be attributed to the prelander of the click it references (Q-22) without reading events.
@@ -342,12 +342,14 @@ Every event has the same envelope (ADR 0005). One event per request (Arthur's de
 | `step_viewed` | browser | `step` 1 to 3, `prefilled` (false; reserved for a prefill decision, Q-1) | visit; step 1 is "started the quiz" (Q-13) |
 | `step_answered` | browser, steps 1 and 2 only | `step`, `question_key`, `value` | visit; history of answer changes (QZ-4) |
 | `quiz_completed` | server, `POST /api/complete` | `answers` object, no email | visit; the current answers in BigQuery |
-| `offer_selected` | server | `offer_id` (null for `no_offer`), `reason` (`lead_return`, `best_epu`, `fallback_universal`, `no_offer`), `moment` (`entry`, `completion`, `redirect`), `catalog_version` | offer, catalog version (P-3) |
-| `offer_click` | server, `GET /go/{offer}` or the entry redirect | `click_id`, `offer_id`, `catalog_version`, `reason` | click, offer, prelander |
-| `lead` | server, accepted postback | `click_id`, `offer_id`, `partner_id`, `transaction_id`, `occurred_at`, `payout`, `currency` | click, and through it the user, offer and prelander (PB-4, Q-22) |
-| `purchase` | server, accepted postback | same as `lead` | same |
+| `offer_selected` | server | `offer_id` (null for `no_offer`), `reason` (`lead_return`, `best_epu`, `fallback_universal`, `no_offer`), `moment` (`entry`, `completion`), `catalog_version` | offer, catalog version (P-3) |
+| `offer_click` | server, `GET /go` or the entry redirect | `click_id`, `offer_id`, `catalog_version`, `reason` | click, offer, prelander |
+| `lead` | server, accepted or duplicate postback | `click_id`, `offer_id`, `partner_id`, `transaction_id`, `occurred_at` (Unix milliseconds), `payout` (the partner's decimal string, or null), `currency` (ISO 4217, or null) | click, and through it the user, offer and prelander (PB-4, Q-22) |
+| `purchase` | server, accepted or duplicate postback | same as `lead` | same |
 
-Step 3 has no browser answer event; finishing it is `quiz_completed`. `lead` and `purchase` are not emitted for quarantined or duplicate postbacks. `offer_selected` is emitted only when selection returns an offer or `no_offer`; an entry that shows the quiz emits `prelander_viewed` alone. `offer_click.reason` is the click's reason, added so BigQuery can tell a Lead return transition from a first one without reading D1.
+`conversions.payout` stores the payout as a number (REAL), while the event carries the partner's string.
+
+Step 3 has no browser answer event; finishing it is `quiz_completed`. A duplicate postback sends its `lead` or `purchase` again with the same EventID, derived from `(partner_id, type, transaction_id)`. If the Queue refused the first send, the endpoint answered `503`, and the partner's retry is how the event reaches analytics; the events table keeps one row per EventID (ADR 0007). A quarantined postback sends nothing. `offer_selected` is emitted only when selection returns an offer or `no_offer`; an entry that shows the quiz emits `prelander_viewed` alone. `offer_click.reason` is the click's reason, added so BigQuery can tell a Lead return transition from a first one without reading D1.
 
 ### The nine events of a visit
 
@@ -363,7 +365,7 @@ A-1 sizes the design at nine events per visit, and the catalog gives the same co
 | `offer_click` | 1 |
 | Total | 9 |
 
-`lead` and `purchase` are counted separately, as in A-1. A changed answer adds a `step_viewed` and a `step_answered`, and a re-selection at `/go` adds an `offer_selected`; A-1 leaves these out. A Lead return visit emits three events, so nine per visit is an upper bound and the load figures in `nfr.md` still hold.
+`lead` and `purchase` are counted separately, as in A-1. A changed answer adds a `step_viewed` and a `step_answered`; A-1 leaves these out. A press on the offer button emits `offer_click` only, even when the catalog changed since the page was shown. A user who was shown one offer and went to another is found by comparing `offer_selected` (`completion`) with `offer_click` within one `visit_id`. A Lead return visit emits three events, so nine per visit is an upper bound and the load figures in `nfr.md` still hold.
 
 ## Trace of the demo
 
@@ -374,9 +376,9 @@ Synthetic data: user `U1` with email `u1@example.com`, prelander `P1`, catalog v
 | 1 | Day 1 10:00. `GET /p/P1` without a cookie (DEMO-2) | none | none | none | none | none | none | none | `prelander_viewed` (`quiz`, visit V1) |
 | 2 | Browser shows and answers steps 1 and 2, shows step 3 | none | none | none | none | none | none | none | `step_viewed` 1, `step_answered` (`gender`, `women`), `step_viewed` 2, `step_answered` (`ethnicity`, `asia`), `step_viewed` 3 |
 | 3 | 10:01:30. `POST /api/complete` | write `U1`, `email_enc`, `email_hash`, `created_at` = `last_completed_at` = 10:01:30 | write (`U1`, `gender`, `"women"`, 10:01:30), (`U1`, `ethnicity`, `"asia"`, 10:01:30) | read: no Leads | read: none | read version 1 | none | none | `quiz_completed` (answers), `offer_selected` (003, `best_epu`, `completion`, 1) |
-| 4 | 10:01:40. `GET /go/003?prelander=P1&visit=V1`, 302 to `https://asia-connect.example/?click_id=c_8f3a` | none | none | write `c_8f3a` (`U1`, 003, 1, `P1`, V1, `best_epu`, 10:01:40) | none | read (1, 003): active | none | none | `offer_click` (`c_8f3a`, 003, 1, `best_epu`) |
+| 4 | 10:01:40. `GET /go?prelander=P1&visit=V1`, 302 to `https://asia-connect.example/?click_id=c_8f3a` | read `U1` | read `gender`, `ethnicity` | read: no Leads; write `c_8f3a` (`U1`, 003, 1, `P1`, V1, `best_epu`, 10:01:40) | read: none | read version 1: 003 selected again | none | none | `offer_click` (`c_8f3a`, 003, 1, `best_epu`) |
 | 5 | 14:00:05. `partnerA` sends a Lead, `T-123`, `c_8f3a` (DEMO-3), answer 202 | none | none | read `c_8f3a` | write #1 (`partnerA`, `lead`, `T-123`, `c_8f3a`, occurred 14:00:00, accepted 14:00:05) | read (1, 003): `partner_id` = `partnerA` (Q-24) | read `partnerA` secret | none | `lead` (`c_8f3a`, 003, `partnerA`, `T-123`) |
-| 6 | 14:03. The same postback again (DEMO-6), answer 200 `duplicate` | none | none | read `c_8f3a` | conflict on (`partnerA`, `lead`, `T-123`), nothing written | read (1, 003) | read `partnerA` | none | none |
+| 6 | 14:03. The same postback again (DEMO-6), answer 200 `duplicate` | none | none | read `c_8f3a` | conflict on (`partnerA`, `lead`, `T-123`), nothing written | read (1, 003) | read `partnerA` | none | `lead` again with the EventID of step 5; the events table keeps one row |
 | 7 | Day 2 09:00. `GET /p/P1` with the `U1` cookie (DEMO-4), 302 to `https://asia-connect.example/?click_id=c_91bb` | read `U1` | read `gender`, `ethnicity` | read `c_8f3a` through the Lead; write `c_91bb` (`U1`, 003, 1, `P1`, V2, `lead_return`, 09:00) | read #1, Lead on 003 accepted 14:00:05 | read version 1: 003 active | none | none | `prelander_viewed` (`lead_return`, visit V2), `offer_selected` (003, `lead_return`, `entry`, 1), `offer_click` (`c_91bb`, 003, 1, `lead_return`) |
 | 8 | 09:30. `partnerA` sends a Purchase, `T-124`, `c_91bb`, payout 25.00 USD (DEMO-5), answer 202 | none | none | read `c_91bb` | write #2 (`partnerA`, `purchase`, `T-124`, `c_91bb`, payout 25.00, `USD`) | read (1, 003) | read `partnerA` | none | `purchase` (`c_91bb`, 003, `partnerA`, `T-124`, 25.00, `USD`) |
 | 9 | Reviewer opens the report (DEMO-5, AN-6) | none | none | read, for prelander and offer | read #1 and #2 | none | none | none | none (the report reads the MVP events database for the funnel) |

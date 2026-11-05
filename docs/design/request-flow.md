@@ -23,8 +23,11 @@ sequenceDiagram
     W->>W: select(facts, catalog, completion) = 003, best_epu
     W-)Q: quiz_completed, offer_selected
     W-->>B: 200 {offer_id 003, name, url, reason, catalog_version}
-    B->>W: GET /go/003
-    W->>D1: read offer 003 status and the user's Leads, then write click c_8f3a
+    B->>W: GET /go?prelander=P1&visit=V1
+    W->>D1: one batch: read answers, Leads and the current catalog
+    D1-->>W: facts
+    W->>W: select(facts, catalog, redirect) = 003, best_epu
+    W->>D1: write click c_8f3a
     W-)Q: offer_click
     W-->>B: 302 https://asia-connect.example/?click_id=c_8f3a
     B->>P: lands on the offer with click_id

@@ -74,6 +74,7 @@ In order: check the partner, the signature and the timestamp; parse and validate
 | Missing or invalid field, body over 16 KB | `400` | nothing |
 | Click belongs to an offer of another partner (Q-24) | `400` | nothing |
 | Unknown `click_id` | `202` | row in `postback_quarantine` with the reason, not counted, alert (Q-11) |
+| A partner secret or `MASTER_KEY` cannot be used (operator error) | `500` `config_error` | nothing |
 | D1 unavailable | `503` | nothing; the partner retries |
 
 - The deduplication key is `(partner_id, type, transaction_id)`, a unique index in D1 (P-4, R-4). A redelivery has the same `transaction_id`; a second real purchase has a new one, so it is counted (PB-5).
@@ -118,4 +119,24 @@ The MVP has the endpoint and a script that signs test requests with a test partn
 - ADR 0002 (no credentials in URLs), ADR 0003 (clicks before redirect, cleanup), ADR 0005 (event path).
 
 ## Outcome
+
+2026-11-05, Part 2 stage 3. `POST /postback/v1/{partner}` is built in `src/routes/postback.ts` as decided, with the signature check in `src/domain/signature.ts` and the writes in `src/db/conversions.ts`. Two details were added while building it: `X-Signature` may carry at most 8 `v1` values, so an unauthenticated request cannot make the Worker run unlimited HMAC checks; and a partner secret that cannot be decrypted answers `500` with `config_error`, since that is our configuration and not the partner's request. The event of an accepted or duplicate postback carries `payout` as the partner's decimal string and `occurred_at` in milliseconds; `conversions.payout` stays a number.
+
+The checks above run under these test names:
+
+| Verification item | Test |
+|---|---|
+| unsigned and wrong signature | `PB-3 R-11 no signature gives 401`, `PB-3 R-11 wrong signature gives 401` |
+| stale timestamp | `PB-3 R-11 stale timestamp gives 401` |
+| malformed postback changes nothing | `PB-8 malformed postback changes nothing: <case>`, one per case |
+| same postback twice, two purchases | `PB-5 R-4 same postback twice counts once`, `PB-5 two purchases with different transaction ids count twice`, `TEST-3 R-4 a redelivered Lead and a second real Purchase` |
+| unknown click | `PB-4 Q-11 unknown click is quarantined with 202` |
+| another partner's click | `PB-4 Q-24 offer mismatch is rejected` |
+| second Lead for the same user and offer | `PB-5 Q-23 second lead for the same user and offer is stored`; counting it once is the report's job, stage 4 |
+| event after a Queue failure | `PB-5 the postback event retried after a queue failure reaches analytics once` |
+| rotation | `PB-3 rotation: signatures with the current and the previous secret are both accepted` |
+| secrets stored encrypted | `PB-3 partner secrets are stored encrypted` |
+| logs | `R-12 postback logs carry no body, signature or transaction id` |
+
+All of them pass in `pnpm check` (333 tests). The demo run against the deployed Worker is recorded in the stage 3 notes of `docs/state/progress.json`.
 

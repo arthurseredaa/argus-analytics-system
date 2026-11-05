@@ -7,6 +7,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "seed": "node scripts/seed.ts",
+    "offer": "node scripts/offer.ts",
+    "postback": "node scripts/postback.ts",
     "test:browser": "bash scripts/test-browser.sh",
     "test:email-scan": "bash scripts/email-scan.sh",
     "types": "wrangler types --strict-vars=false --env-file /dev/null",

@@ -58,7 +58,7 @@ Disabled-offer Leads are filtered out before any of these apply.
 | Lead for the universal offer 007 | Same as any Lead: redirect to 007 while it is active | none |
 | User changes an answer (back button, second tab) | Latest accepted answer wins | Q-4 |
 | Unknown answer value (for example `africa`) | Rejected by validation, not stored | none |
-| Offer disabled between selection and redirect | The redirect endpoint re-checks the offer status and runs selection again if it is no longer active. Rules 1 and 2 only allow active offers. | Q-9 |
+| Offer disabled between selection and redirect | The redirect endpoint takes no offer ID and runs selection again on every press, so a disabled offer is never sent to and the press goes to the new result. Rules 1 and 2 only allow active offers. | Q-9 |
 | Lead for an offer removed from the catalog | Treated like a Lead for a disabled offer (rule 3) | none |
 
 ## Decision table (expected results)

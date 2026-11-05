@@ -30,12 +30,15 @@
     {
       "id": 3,
       "title": "Redirect, postbacks and the Lead return",
-      "status": "next"
+      "status": "done",
+      "closed": "2026-11-05",
+      "verified": "pnpm check (333 passed, 30 files); pnpm test -t \"OFF-3|OFF-4|OFF-9|ID-3\" (36 passed); pnpm test -t \"PB-5|TEST-3\" (10 passed); pnpm test -t \"PB-3|PB-8\" (27 passed); pnpm test -t \"A-4|NFR-1|DEMO-3|DEMO-4|DEMO-6\" (6 passed); grep -rnE -- \"curl .*-L( |$)|redirect: ?follow\" tests/ scripts/ docs/testing/ prints nothing. DEMO-3, DEMO-4, the repeated Lead and GET /healthz are checked against BASE right after this commit deploys.",
+      "notes": "Built through subagent-driven development from docs/plans/part2-stage-3-redirect-postbacks.md: five tasks, a review per task, a final whole-branch review and one fix wave. Decisions by Arthur: (1) GET /go?prelander=&visit= carries no offer id; the Worker runs select() for the cookie's user at the press, writes the click, then answers 302, so nothing in the URL can be swapped and a catalog change between showing and pressing applies (R-9); offer_selected with moment redirect is dropped and a visit stays at 9 events; (2) a user with no users row at /go gets a 302 to /p/{prelander} (Q-30); (3) only Arthur can send postbacks to the deployed Worker, because the test partner secrets are in his .dev.vars.remote; reviewers run the demo locally with their own .dev.vars. Correction during the stage: data-model.md said a duplicate postback sends no event; it now follows ADR 0007, so a duplicate sends the event again with the same derived EventID and an event lost to a Queue failure after the D1 write still arrives once. Rulings during the build: every test that changes an offer restores it in finally; every current-design mention of /go/{offer} was updated, earlier stage plans and docs/ai were left as written; the postback event carries payout as the partner's decimal string and occurred_at in ms, while conversions.payout stays REAL; 500 config_error when a partner secret cannot be decrypted. Defects the reviews found and fixed: design.md said 503 happens only when D1 is down (the Queue too, after the row is written); part2-mvp-stages.md said only an accepted postback sends the event; X-Signature had no cap on v1 values (now 8); pnpm postback printed a stack trace when the Worker was unreachable. Explain-back: Arthur first described the Lead return (new visit and click ids) when asked about a redelivered Lead; after the question was restated he named transaction_id as what tells a redelivery from a second Purchase, and said /go selects the offer again at the press. Deferred: a known-answer HMAC vector computed outside the code (before stage 7); the README must say reviewers run postbacks locally (stage 7); catalog_config_error logging at /go and entry (stage 6); stage 4 decides how clicks with user_id null count, and conversions join through clicks; remote atomicity of wrangler d1 execute --file is probed before the first pnpm offer --remote."
     },
     {
       "id": 4,
       "title": "Report",
-      "status": "pending"
+      "status": "next"
     },
     {
       "id": 5,

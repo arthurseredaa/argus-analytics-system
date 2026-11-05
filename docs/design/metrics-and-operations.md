@@ -130,7 +130,7 @@ Targets, server side, p95 per endpoint over a rolling 15-minute window ([nfr.md,
 | Endpoint | p95 target | What the request does |
 |---|---|---|
 | `POST /api/events` | 50 ms | validates the event and sends it to the Queue; no D1 |
-| `GET /p/{prelander}`, `POST /api/complete`, `GET /go/{offer}` | 300 ms | one D1 batch to a database in one region, then `select()` |
+| `GET /p/{prelander}`, `POST /api/complete`, `GET /go` | 300 ms | one D1 batch to a database in one region, then `select()` |
 | `POST /postback/v1/{partner}` | 300 ms | signature check, click lookup and one insert in D1 |
 
 How it is measured:
@@ -177,7 +177,7 @@ What a reviewer sees during each outage:
 | `quarantine_new_row` | new row in `quarantine` | any | a signed postback named an unknown click (Q-11) | check the partner integration, the cleanup window or a forgery; resend if the click exists |
 | `d1_facts_size` | size of the facts database | above 7 GB | migration trigger one ([ADR 0003](../adr/0003-operational-store.md#migration)) | start the migration plan in ADR 0003 |
 | `d1_events_size` | size of the MVP events database | above 7 GB on Paid, 350 MB on Free | the MVP stand-in for BigQuery is near its limit (MVP-5) | point the loader at BigQuery (see "MVP storage limits") |
-| `selection_p95` | p95 of `GET /p/{prelander}`, `POST /api/complete`, `GET /go/{offer}` | above 300 ms over 15 minutes | migration trigger two | split p95 by region and by D1 query time; if D1 is the cause, follow ADR 0003 |
+| `selection_p95` | p95 of `GET /p/{prelander}`, `POST /api/complete`, `GET /go` | above 300 ms over 15 minutes | migration trigger two | split p95 by region and by D1 query time; if D1 is the cause, follow ADR 0003 |
 | `d1_overload_errors` | D1 errors that report overload, counted by the Worker | more than 10 in an hour (a starting value) | migration trigger three | check write load on the facts database; follow ADR 0003 if it repeats |
 | `worker_5xx_rate` | share of `5xx` responses among all requests | above 1% over 5 minutes | a broken deploy or a failing dependency | read the Worker logs; roll back the last deploy if it is the cause |
 | `probe_failed` | synthetic probe from the EU or the US | two consecutive failures (wrong status or no answer) | the public path is broken for real users | check the Cloudflare status page, DNS and the last deploy |
@@ -235,7 +235,7 @@ Q-20's default: after a Purchase on offer X, X is removed from the user's candid
 
 The flag: a column `offers.exclude_after_purchase INTEGER NOT NULL DEFAULT 0 CHECK (exclude_after_purchase IN (0, 1))`. It lives on the catalog row, per catalog version, so marketing turns it on for one offer with the catalog script and no deploy, and every `offer_selected` event's `catalog_version` shows whether the flag applied (P-3). A single global switch would be smaller: one config value and no migration. Per offer is the better fit because the right answer differs by offer. A dating service with a one-time purchase may want the user gone, while one that sells repeat credits wants them back, and a global switch would also apply to the universal offer.
 
-The rule step: step 1 of `select()` ([ADR 0004](../adr/0004-offer-selection-semantics.md)), which is empty today, marks every offer for which the user has an accepted Purchase and whose flag is 1 in the current catalog version as inactive for this user. From there the existing steps do the work: rule 1 skips the offer's Leads because the offer is not active, rule 3 skips the quiz when the answers are sufficient, and rule 2 never matches it. So for this user an excluded offer behaves exactly like a disabled offer, and no step after the first one learns a new case. The facts already include Purchases: the query that reads the user's conversions at entry, at completion and at `/go/{offer}` changes from `v.type = 'lead'` to both types:
+The rule step: step 1 of `select()` ([ADR 0004](../adr/0004-offer-selection-semantics.md)), which is empty today, marks every offer for which the user has an accepted Purchase and whose flag is 1 in the current catalog version as inactive for this user. From there the existing steps do the work: rule 1 skips the offer's Leads because the offer is not active, rule 3 skips the quiz when the answers are sufficient, and rule 2 never matches it. So for this user an excluded offer behaves exactly like a disabled offer, and no step after the first one learns a new case. The facts already include Purchases: the query that reads the user's conversions at entry, at completion and at `/go` changes from `v.type = 'lead'` to both types:
 
 ```sql
 SELECT c.offer_id, v.type, v.accepted_at
@@ -244,7 +244,7 @@ JOIN clicks c ON c.click_id = v.click_id
 WHERE c.user_id = ?1 AND v.type IN ('lead', 'purchase');
 ```
 
-`GET /go/{offer}` re-reads the offer's status through the same step, so an excluded offer is inactive there too and selection runs again (R-9).
+`GET /go` runs `select()` on every press, so an excluded offer is inactive there too and the press goes to the next result (R-9).
 
 Interaction with rule 1: an excluded offer also loses its Lead redirect. A user with a Lead and a Purchase on 001, no other Lead, and 001 flagged, is handled like a user whose Lead is for a disabled offer (OFF-9): at entry with sufficient answers, rule 3 skips the quiz and rule 2 gives 003 for women + asia; with insufficient answers, the quiz. With a Lead on 004 as well, 004 wins by rule 1. The alternative, removing the Lead and showing the quiz again at entry, would introduce a second kind of unusable Lead with its own behaviour, so it was not taken.
 
@@ -263,8 +263,8 @@ Files and migrations touched:
 - `migrations/000N_offers_exclude_after_purchase.sql`: the new column.
 - Catalog script: an option to set or clear the flag for an offer in a new version.
 - `select()` step 1 and its decision table tests.
-- The facts query used at entry, completion and `/go/{offer}`: Leads and Purchases.
-- The `/go/{offer}` handler: no change, if its status check goes through `select()` step 1; otherwise one line.
+- The facts query used at entry, completion and `/go`: Leads and Purchases.
+- The `/go` handler: no change, because it calls `select()`.
 - Event schema: no change. `offer_selected.reason` keeps its values; a new reason is not needed.
 - Metrics: none.
 

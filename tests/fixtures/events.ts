@@ -93,12 +93,14 @@ export function failingQueue(): Queue {
 // `app.fetch` with a real execution context; waitUntil work is finished before the response is returned to the test.
 export async function call(
   path: string,
-  init: { method?: string; cookie?: string; body?: string },
+  init: { method?: string; cookie?: string; body?: string; headers?: Record<string, string> },
   envOverride?: Partial<Env>,
   app: Hono<AppEnv> = createApp(prelanderFlows),
 ): Promise<Response> {
   const headers = new Headers({ "content-type": "application/json" });
   if (init.cookie !== undefined) headers.set("cookie", init.cookie);
+  // Extra headers such as X-Signature; a content-type here replaces the JSON default.
+  for (const [name, value] of Object.entries(init.headers ?? {})) headers.set(name, value);
   const req = new Request(`https://example.com${path}`, {
     method: init.method ?? "GET",
     headers,

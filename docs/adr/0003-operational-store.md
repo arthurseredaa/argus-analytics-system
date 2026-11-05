@@ -50,7 +50,7 @@ Option 1: one D1 database holds the facts the rules need, and raw events stay ou
 
 ### Where offer status is read
 
-Status is read from the current catalog version at three points: at entry, for the Lead return (rule 1 and rule 3); at quiz completion, for selection; and at the redirect to the offer (`/go/{offer}`). If the offer was turned off after selection, the redirect runs selection again instead of sending the user to a disabled offer (R-9, OFF-9).
+Status is read from the current catalog version at three points: at entry, for the Lead return (rule 1 and rule 3); at quiz completion, for selection; and at the press on the offer button (`GET /go`), which runs selection again for the cookie's user. So an offer turned off after selection is never sent to: the press goes to the new result (R-9, OFF-9).
 
 ### Cleanup
 
