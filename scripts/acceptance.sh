@@ -21,3 +21,23 @@ complete() { # complete <jar> <gender> <ethnicity> <email>: the only call that w
   curl -s -b "$1" -c "$1" -X POST "$BASE/api/complete" -H 'content-type: application/json' \
     -d "{\"prelander_id\":\"demo\",\"answers\":{\"gender\":\"$2\",\"ethnicity\":\"$3\"},\"email\":\"$4\"}"
 }
+viewstep() { # viewstep <jar> <step> [seq]: one step_viewed event, analytics only, prints the HTTP status
+  curl -s -b "$1" -c "$1" -o /dev/null -w '%{http_code}\n' -X POST "$BASE/api/events" -H 'content-type: application/json' \
+    -d "{\"event_id\":\"$(uuidgen | tr A-Z a-z)\",\"schema_version\":1,\"type\":\"step_viewed\",\"client_time\":$(date +%s)000,\"visit_id\":\"v1\",\"seq\":${3:-1},\"prelander_id\":\"demo\",\"payload\":{\"step\":$2,\"prefilled\":false}}"
+}
+report() { # report [query]: the report as sorted JSON without the two fields that change on every call
+  curl -s "$BASE/api/report${1:+?$1}" | jq -S 'del(.as_of, .events_newest_at)'
+}
+wait_report() { # wait_report <jq filter> <expected> [seconds]: polls every 3 seconds, default 90; prints the last value and returns 1 on timeout
+  local deadline got
+  deadline=$(( $(date +%s) + ${3:-90} ))
+  while :; do
+    got=$(curl -s "$BASE/api/report" | jq -r "$1" 2>/dev/null || true)
+    [ "$got" = "$2" ] && return 0
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "$got"
+      return 1
+    fi
+    sleep 3
+  done
+}

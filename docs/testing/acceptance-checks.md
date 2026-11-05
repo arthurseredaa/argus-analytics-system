@@ -40,7 +40,12 @@ source scripts/acceptance.sh
 # snap <file>                                   writes state for $JAR and the report into <file>
 # answer <jar> <key> <value> [seq]              one step_answered event, prints the HTTP status
 # complete <jar> <gender> <ethnicity> <email>   POST /api/complete, the only call that writes answers and email to D1
+# viewstep <jar> <step> [seq]                   one step_viewed event, prints the HTTP status
+# report [query]                                GET /api/report as sorted JSON without as_of and events_newest_at, so two snapshots can be compared with diff
+# wait_report <jq filter> <expected> [seconds]  polls /api/report every 3 seconds (default 90) until the filter prints the expected value; returns 1 and prints the last value on timeout
 ```
+
+The report counts events, and events reach the store through the Queue, which delivers a batch after up to 30 seconds. A check that reads the report right after a visit uses `wait_report`.
 
 Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in these checks: following a redirect would open a partner site (DEMO-9).
 
@@ -425,9 +430,9 @@ Expected: started 3, step 1 3, step 2 2, step 3 2, transitions 1, Lead 1, Purcha
 
 Automated: `pnpm test -- -t "AN-2"`. Case: `AN-2 breakdowns sum to the total`.
 
-Manual: run users through `/p/demo` and `/p/demo2`, on offers 003 and 004. Query the report with each `prelander`, each `offer`, and a `from`/`to` that excludes today.
+Manual: reset, then run one user to offer 003 (women and asia) and one to offer 004 (women and europe) on `/p/demo`. The catalog has one prelander, so the per-prelander split is covered by the automated test, which writes rows with two prelander ids. Query the report with `prelander=demo`, with `offer=003`, with `offer=004`, and with a `from` and `to` that exclude today, for example `from=2001-01-01&to=2001-01-02`.
 
-Expected: per-prelander and per-offer numbers add up to the total. The excluded period returns zeros.
+Expected: the per-offer Leads, transitions and Purchases add up to the total, and `prelander=demo` equals the total. The excluded period returns zeros.
 
 ### AN-3 Conversion denominators
 
@@ -505,9 +510,9 @@ Expected: as in OFF-3. The lead return happens before the page renders, with no 
 
 Depends on: all cards above.
 
-Automated: `pnpm test:e2e --base <staging url>` (the demo scenario below as a script).
+Automated: `pnpm test:e2e --base $BASE` (the demo scenario below as `scripts/demo.sh`). Without `--base` and `BASE`, `pnpm test:e2e` starts its own `wrangler dev`. A remote run needs `.dev.vars.remote` for the signed postbacks.
 
-Manual: run the demo scenario below with `BASE` set to the staging URL.
+Manual: run the demo scenario below with `BASE` set to the deployed URL.
 
 Expected: same results as locally.
 
@@ -515,13 +520,13 @@ Expected: same results as locally.
 
 Automated: none.
 
-Manual: `grep -rni bigquery src/ wrangler.*` and read the report module's data source.
+Manual: `grep -rniE "@google-cloud|googleapis|bigquery\.(googleapis|client)|GOOGLE_APPLICATION_CREDENTIALS" src/ wrangler.jsonc package.json`, and read the report module's data source.
 
-Expected: no BigQuery client or credential in the runtime. The report reads the Cloudflare store chosen in ADR 0003.
+Expected: the grep prints nothing: no BigQuery client or credential in the runtime. The word "BigQuery" still appears in two comments (`src/db/events.ts` and `wrangler.jsonc`, both "MVP stand-in for BigQuery"); a search for the bare word would list them. The report reads the Cloudflare store chosen in ADR 0003.
 
 ### Demo scenario
 
-DEMO-2 to DEMO-6 run as one script from an empty store. Every step's expected output is listed; the README table (DEMO-7) must match it.
+DEMO-2 to DEMO-6 run as one script from an empty store. Every step's expected output is listed; the README table (DEMO-7) must match it. `pnpm test:e2e` runs the same steps as `scripts/demo.sh` and asserts each answer; it waits for the report where the Queue delivers events (up to 30 seconds per batch), so a run takes about a minute.
 
 ```sh
 curl -s -X POST $BASE/__test/reset
@@ -529,29 +534,53 @@ JAR=$TMP/demo.jar
 
 # DEMO-2: new user, quiz, offer
 curl -s -c $JAR -b $JAR -o /dev/null -w '%{http_code}\n' $BASE/p/demo    # 200, quiz
-answer $JAR gender women                                                 # 202, analytics only, nothing in D1
-answer $JAR ethnicity asia                                               # 202
+viewstep $JAR 1 1                                                        # 202, step 1 shown: the user has started
+answer $JAR gender women 2                                               # 202, analytics only, nothing in D1
+viewstep $JAR 2 3                                                        # 202
+answer $JAR ethnicity asia 4                                             # 202
+viewstep $JAR 3 5                                                        # 202
 complete $JAR women asia user1@example.com | jq -c '{offer_id,reason}'   # {"offer_id":"003","reason":"best_epu"}; email only in this body
 CLICK=$(curl -s -b $JAR -o /dev/null -w '%{redirect_url}' "$BASE/go?prelander=demo" | sed 's/.*click_id=//')
+wait_report '[.visits,.started,.step_2,.step_3,.completed]|@csv' '1,1,1,1,1'
 
 # DEMO-3: Lead for that click
-pnpm postback lead --click $CLICK --txn DEMO-L1                          # 202
+pnpm -s postback lead --click $CLICK --txn DEMO-L1                       # 202
+report | jq .lead                                                        # 1
 
 # DEMO-4: return without the quiz
 curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/p/demo
                                                                          # 302 https://asia-connect.example/?click_id=<new id>
+wait_report .visits 2
 
 # DEMO-5: Purchase, report changes
-curl -s $BASE/api/report | jq .purchase                                  # 0
-pnpm postback purchase --click $CLICK --txn DEMO-P1                      # 202
-curl -s $BASE/api/report | jq .purchase                                  # 1
+report > $TMP/before.json
+pnpm -s postback purchase --click $CLICK --txn DEMO-P1                   # 202
+report > $TMP/after.json
+diff $TMP/before.json $TMP/after.json                                    # purchase 0 -> 1 in three places, lead_to_purchase 0 -> 1 in one
+curl -s $BASE/report | grep -o 'data-metric="purchase">[0-9]*'           # data-metric="purchase">1
 
 # DEMO-6: same postback again
-pnpm postback purchase --click $CLICK --txn DEMO-P1                      # 200 duplicate
-curl -s $BASE/api/report | jq '{lead,purchase}'                          # {"lead":1,"purchase":1}
+pnpm -s postback purchase --click $CLICK --txn DEMO-P1                   # 200 {"status":"duplicate"}
+pnpm -s postback lead --click $CLICK --txn DEMO-L1                       # 200
+report | jq -c '{lead,purchase}'                                         # {"lead":1,"purchase":1}
 ```
 
-Report after the script, with the current defaults (Q-13, Q-21): started 1, step 1 1, step 2 1, step 3 1, transitions 2 (the return is a repeat transition), unique users sent to an offer 1, Lead 1, Purchase 1.
+The DEMO-5 diff has exactly four hunks: `purchase` in the total, `purchase` in the day row, and `purchase` and `rates.lead_to_purchase` in offer 003 of that row. Nothing else changes. The snapshots drop `as_of` and `events_newest_at` because they change on every call. The script checks the four paths with `jq`.
+
+### The DEMO-7 table: the report after each step
+
+From an empty store, with the current defaults (Q-13, Q-21). The columns are the keys of the report's total.
+
+| After | visits | started | step_1 | step_2 | step_3 | completed | went_to_offer | transitions | lead | purchase |
+|---|---|---|---|---|---|---|---|---|---|---|
+| reset | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| DEMO-2 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 | 0 |
+| DEMO-3 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 1 | 0 |
+| DEMO-4 | 2 | 1 | 1 | 1 | 1 | 1 | 1 | 2 | 1 | 0 |
+| DEMO-5 | 2 | 1 | 1 | 1 | 1 | 1 | 1 | 2 | 1 | 1 |
+| DEMO-6 | 2 | 1 | 1 | 1 | 1 | 1 | 1 | 2 | 1 | 1 |
+
+DEMO-5 also moves offer 003's `lead_to_purchase` from 0 to 1, and these are the only cells the Purchase changes. The return visit counts as a visit and a transition, not as a start or a new user on the offer (Q-21).
 
 ### DEMO-1 Reviewers can repeat the scenario from short instructions
 

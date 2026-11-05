@@ -66,6 +66,7 @@ jobs:
       - run: pnpm migrate:local
       - run: pnpm seed --local
       - run: pnpm test:browser
+      - run: pnpm test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
