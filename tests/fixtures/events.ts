@@ -11,8 +11,8 @@ import type { Hono } from "hono";
 import { createApp, type AppEnv } from "../../src/app.ts";
 import { prelanderFlows } from "../../src/domain/prelanders.ts";
 import worker from "../../src/index.ts";
-import { consumeEvents } from "../../src/events/consumer.ts";
 import type { StoredEvent } from "../../src/events/envelope.ts";
+import { loadNow } from "./files.ts";
 
 export function storedEvent(overrides: Partial<StoredEvent> = {}): StoredEvent {
   return {
@@ -30,16 +30,21 @@ export function storedEvent(overrides: Partial<StoredEvent> = {}): StoredEvent {
   };
 }
 
-// Without `db` the batch goes through the Worker's own queue handler, with `db` straight to the consumer.
-export async function deliver(bodies: readonly unknown[], db?: D1Database): Promise<QueueResult> {
+// The batch goes through the Worker's own queue handler, then one loader run, so a test sees the
+// events in the table as after the next cron. `load: false` stops at R2 pending/.
+export async function deliver(
+  bodies: readonly unknown[],
+  options: { load?: boolean } = {},
+): Promise<QueueResult> {
   const batch = createMessageBatch(
     "events",
     bodies.map((body, i) => ({ id: `m${i}`, timestamp: Date.now(), attempts: 1, body })),
   );
   const ctx = createExecutionContext();
-  if (db) await consumeEvents(batch, db);
-  else await worker.queue(batch, env);
-  return getQueueResult(batch, ctx);
+  await worker.queue(batch, env);
+  const result = await getQueueResult(batch, ctx);
+  if (options.load !== false) await loadNow();
+  return result;
 }
 
 export type StoredRow = {

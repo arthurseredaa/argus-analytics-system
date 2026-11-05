@@ -41,8 +41,11 @@
       },
     ],
   },
+  // ADR 0005, ADR 0006: the loader, every minute in the MVP.
+  "triggers": { "crons": ["* * * * *"] },
   "r2_buckets": [
-    // ADR 0005: raw event archive.
+    // ADR 0005: raw event archive. The 30-day lifecycle rules for loaded/ and rejected/ are not in
+    // this file; they are applied once to the account (decision 16 of the stage 5 plan).
     { "binding": "EVENTS_BUCKET", "bucket_name": "funnels-events" },
   ],
   "analytics_engine_datasets": [

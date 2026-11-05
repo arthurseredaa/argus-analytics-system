@@ -1,41 +1,39 @@
-// Events: the Queue consumer that writes event batches to the events database.
-// Implements ADR 0005; serves ID-1, ID-4, NFR-5, NFR-8, R-3. Stage 5 replaces its D1 write with R2 files.
-// Log lines name counts and message ids, never a message body.
-import { insertEvents } from "../db/events.ts";
-import { storedEventSchema } from "./envelope.ts";
-import type { StoredEvent } from "./envelope.ts";
+// Events: the Queue consumer that writes each event batch as one NDJSON file to R2 pending/.
+// Implements ADR 0005 and ADR 0006; serves NFR-5, NFR-8, R-3. The D1 write moved to the loader (src/events/loader.ts).
+// Log lines name counts and error classes, never a message body.
+import { NDJSON_PUT, pendingKey, toNdjson } from "./files.ts";
 
-export async function consumeEvents(batch: MessageBatch<unknown>, db: D1Database): Promise<void> {
-  const valid: { message: Message<unknown>; event: StoredEvent }[] = [];
-  let invalid = 0;
+// Seconds before the next delivery of a message that failed `attempts` times (1 on the first
+// delivery): 60, 120, 240, 480, 960, 1920, then 3600. Ten retries add up to 18,180 seconds.
+export function retryDelaySeconds(attempts: number): number {
+  return Math.min(60 * 2 ** (attempts - 1), 3600);
+}
 
-  for (const message of batch.messages) {
-    const parsed = storedEventSchema.safeParse(message.body);
-    if (parsed.success) {
-      valid.push({ message, event: parsed.data });
-    } else {
-      // Retried alone: after max_retries it lands in the dead letter queue, the rest is not held back.
-      invalid += 1;
-      console.log(JSON.stringify({ msg: "consumer_invalid_message", id: message.id }));
-      message.retry();
-    }
-  }
-
+// Every body is written as it came: the loader validates, so one bad row never costs the batch
+// ten retries and a dead letter slot.
+export async function consumeEvents(
+  batch: MessageBatch<unknown>,
+  bucket: R2Bucket,
+  now: number,
+): Promise<void> {
+  const count = batch.messages.length;
   try {
-    await insertEvents(
-      db,
-      valid.map((v) => v.event),
+    await bucket.put(
+      pendingKey("batch", now, crypto.randomUUID()),
+      toNdjson(batch.messages.map((message) => message.body)),
+      NDJSON_PUT,
     );
   } catch (err) {
     // The class name only: an error message can quote the rows it failed on.
     const name = err instanceof Error ? err.name : "unknown";
-    console.log(JSON.stringify({ msg: "consumer_write_failed", count: valid.length, name }));
-    // A fixed 60 second delay so a D1 hiccup does not burn all 10 retries at once.
-    // Stage 5 replaces this with the growing delays of ADR 0005.
-    batch.retryAll({ delaySeconds: 60 });
+    console.log(JSON.stringify({ msg: "consumer_write_failed", count, name }));
+    // Per message, not retryAll: a batch can mix fresh messages with retried ones.
+    for (const message of batch.messages) {
+      message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
+    }
     return;
   }
 
-  for (const { message } of valid) message.ack();
-  console.log(JSON.stringify({ msg: "consumer_batch", stored: valid.length, invalid }));
+  for (const message of batch.messages) message.ack();
+  console.log(JSON.stringify({ msg: "consumer_batch", written: count }));
 }
