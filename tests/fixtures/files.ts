@@ -1,6 +1,13 @@
-// Fixture: reads of the events bucket and a bucket that refuses, for the R2 file tests.
-// Serves NFR-4, NFR-5, R-16; the layout is in src/events/files.ts.
+// Fixture: reads of the events bucket, a bucket that refuses, and the loader's inputs, for the R2 file tests.
+// Serves NFR-4, NFR-5, R-16; the layout is in src/events/files.ts, the loader in src/events/loader.ts.
 import { env } from "cloudflare:test";
+import { PAUSE_KEY, pendingKey, toNdjson } from "../../src/events/files.ts";
+import {
+  LOADER_LIMITS,
+  runLoader,
+  type LoaderLimits,
+  type LoaderRun,
+} from "../../src/events/loader.ts";
 
 const down = async () => {
   throw new Error("r2 down");
@@ -43,4 +50,50 @@ export async function filesWith(prefix: string, needle: string): Promise<string[
     if (object !== null && (await object.text()).includes(needle)) found.push(key);
   }
   return found;
+}
+
+// A pending file: rows as NDJSON, or a raw string. A low `at` sorts the file before any other.
+export async function putPending(
+  content: readonly unknown[] | string,
+  at?: number,
+): Promise<string> {
+  const key = pendingKey("batch", at ?? Date.now(), crypto.randomUUID());
+  await env.EVENTS_BUCKET.put(key, typeof content === "string" ? content : toNdjson(content));
+  return key;
+}
+
+export async function pauseLoader(): Promise<void> {
+  await env.EVENTS_BUCKET.put(PAUSE_KEY, "");
+}
+
+export async function resumeLoader(): Promise<void> {
+  await env.EVENTS_BUCKET.delete(PAUSE_KEY);
+}
+
+// One loader run against the test bucket; `events` swaps the database for a failing one.
+export function loadNow(limits?: Partial<LoaderLimits>, events?: D1Database): Promise<LoaderRun> {
+  return runLoader({ EVENTS_BUCKET: env.EVENTS_BUCKET, EVENTS: events ?? env.EVENTS }, Date.now(), {
+    ...LOADER_LIMITS,
+    ...limits,
+  });
+}
+
+// An events database whose inserts fail but which still answers `SELECT 1`.
+export function insertFailingEvents(): D1Database {
+  return {
+    prepare: (sql: string) => env.EVENTS.prepare(sql),
+    batch: async () => {
+      throw new Error("SQLITE_CONSTRAINT");
+    },
+  } as unknown as D1Database;
+}
+
+const d1Down = async () => {
+  throw new Error("d1 down");
+};
+
+// An events database that answers nothing, the way an outage looks to the Worker.
+export function unreachableEvents(): D1Database {
+  const statement = { first: d1Down, run: d1Down, all: d1Down, bind: () => statement };
+  return { prepare: () => statement, batch: d1Down } as unknown as D1Database;
 }
