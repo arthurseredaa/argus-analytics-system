@@ -334,7 +334,7 @@ Automated: `pnpm test -- -t "PB-1"`. Cases: `PB-1 signed lead is accepted`, `PB-
 
 Manual: after a transition, `pnpm postback lead --click $CLICK --txn T1`, then `pnpm postback purchase --click $CLICK --txn P1`.
 
-Expected: both answer 200. `state` shows one Lead and one Purchase for the user and offer.
+Expected: both answer 202. `state` shows one Lead and one Purchase for the user and offer.
 
 ### PB-2 The postback contract
 
@@ -397,7 +397,7 @@ Automated: `pnpm test -- -t "PB-7"`. Case: `PB-7 helper produces a signature the
 
 Manual: from a fresh clone, follow the README section on test postbacks word for word.
 
-Expected: the commands work as written and print 200. No separate simulator server runs.
+Expected: the commands work as written and print 202. No separate simulator server runs.
 
 ### PB-8 Malformed and unauthorised postbacks change nothing
 
@@ -535,7 +535,7 @@ complete $JAR women asia user1@example.com | jq -c '{offer_id,reason}'   # {"off
 CLICK=$(curl -s -b $JAR -o /dev/null -w '%{redirect_url}' "$BASE/go?prelander=demo" | sed 's/.*click_id=//')
 
 # DEMO-3: Lead for that click
-pnpm postback lead --click $CLICK --txn DEMO-L1                          # 200
+pnpm postback lead --click $CLICK --txn DEMO-L1                          # 202
 
 # DEMO-4: return without the quiz
 curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/p/demo
@@ -543,11 +543,11 @@ curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' $BASE/p/demo
 
 # DEMO-5: Purchase, report changes
 curl -s $BASE/api/report | jq .purchase                                  # 0
-pnpm postback purchase --click $CLICK --txn DEMO-P1                      # 200
+pnpm postback purchase --click $CLICK --txn DEMO-P1                      # 202
 curl -s $BASE/api/report | jq .purchase                                  # 1
 
 # DEMO-6: same postback again
-pnpm postback purchase --click $CLICK --txn DEMO-P1                      # 200
+pnpm postback purchase --click $CLICK --txn DEMO-P1                      # 200 duplicate
 curl -s $BASE/api/report | jq '{lead,purchase}'                          # {"lead":1,"purchase":1}
 ```
 
