@@ -25,6 +25,7 @@ Things that can break correctness, cost or the delivery itself. "Mitigation" is 
 | R-12 | Email leaks into URLs or logs (query string, error messages, request logging, Cloudflare logs). | Breaks a spec rule and GDPR. | Email only in POST bodies; no request-body logging; redact in error handling; never in analytics. | Test that searches captured logs for a test email. |
 | R-13 | Partners only support GET postbacks with a token in the URL. | Tokens end up in partner and proxy logs. | Not offered: the contract accepts only signed POST requests (ADR 0007). If a real partner can only send GET, a new ADR decides how, with per-partner rotating tokens and an IP allowlist as the starting point. | Covered by Q-6; `PB-3 unsigned postback is rejected and changes nothing`. |
 | R-14 | Event spam or bots. | Polluted funnel, higher cost. | Rate limiting per IP and per user; payload size limits. | Load test includes abusive client. |
+| R-23 | A client release puts an email into the payload of an event type the Worker does not know. | Personal data in the Queue, R2 and BigQuery, which are expensive to purge (Q-16). | `sanitizePayload()` in the producer removes every payload key whose name contains `email` and logs the count. An email inside a string value, such as a page URL with `?email=`, is not removed: accepted risk (Arthur, 2026-11-05). | `R-23 R-12 an email field in the payload of an unknown type is removed before the Queue`. |
 
 ## Scale and cost
 
