@@ -10,7 +10,7 @@ import { insertConversion, insertQuarantine, readPartner } from "../db/conversio
 import { ConfigError, decrypt, importAesKey } from "../domain/crypto.ts";
 import { verifySignature } from "../domain/signature.ts";
 import { derivedEventId, makeServerEvent } from "../events/envelope.ts";
-import { sendEvent } from "../events/producer.ts";
+import { EventsUnavailable, sendEvent } from "../events/producer.ts";
 
 export const MAX_POSTBACK_BYTES = 16_384;
 const PARTNER_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -227,8 +227,9 @@ async function handle(c: Context<AppEnv>): Promise<Answer> {
     eventId: await derivedEventId([partnerId, body.type, body.transaction_id]),
   });
   try {
-    await sendEvent(c.env.EVENTS_QUEUE, event);
-  } catch {
+    await sendEvent(c.env, event);
+  } catch (err) {
+    if (!(err instanceof EventsUnavailable)) throw err;
     return {
       status: 503,
       body: { error: "unavailable" },

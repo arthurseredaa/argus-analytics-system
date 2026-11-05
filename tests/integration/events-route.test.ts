@@ -4,6 +4,7 @@ import { createApp } from "../../src/app.ts";
 import { prelanderFlows } from "../../src/domain/prelanders.ts";
 import { browserEvent, deepPayload } from "../fixtures/event-bodies.ts";
 import { captureQueue, deliver, eventsOf, failingQueue, postEvent } from "../fixtures/events.ts";
+import { failingBucket } from "../fixtures/files.ts";
 import { newCookie } from "../fixtures/http.ts";
 
 const idOf = (cookie: string) => cookie.slice(4);
@@ -204,9 +205,12 @@ describe("POST /api/events", () => {
     expect(sent).toHaveLength(0);
   });
 
-  it("NFR-4 the event answers 503 with Retry-After when the Queue refuses", async () => {
+  it("NFR-4 the event answers 503 with Retry-After when the Queue and R2 both refuse", async () => {
     const spies = spyConsole();
-    const res = await postEvent(browserEvent(), newCookie(), { EVENTS_QUEUE: failingQueue() });
+    const res = await postEvent(browserEvent(), newCookie(), {
+      EVENTS_QUEUE: failingQueue(),
+      EVENTS_BUCKET: failingBucket(),
+    });
     expect(res.status).toBe(503);
     expect(res.headers.get("retry-after")).toBe("30");
     expect(await res.json()).toEqual({ error: "unavailable" });
