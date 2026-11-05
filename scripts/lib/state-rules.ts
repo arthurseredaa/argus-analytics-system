@@ -64,6 +64,7 @@ export function checkProgress(doc: unknown): string[] {
   for (const key of Object.keys(doc)) {
     if (!TOP_KEYS.includes(key)) errors.push(`unknown top-level key "${key}"`);
   }
+  if ("$schema" in doc && typeof doc.$schema !== "string") errors.push("$schema must be a string");
   if (typeof doc.plan !== "string") errors.push("plan must be a string");
   if (typeof doc.updated !== "string" || !DATE.test(doc.updated)) {
     errors.push(`updated must match ${DATE}`);

@@ -54,8 +54,9 @@ if (command === "check") {
     fail(`${(error as Error).message}\n${USAGE}`);
   }
   const { values, positionals } = parsed;
-  const id = Number(positionals[0]);
-  if (positionals.length !== 1 || !Number.isInteger(id) || id < 0 || !values.verified) {
+  const idText = positionals[0] ?? "";
+  const id = Number(idText);
+  if (positionals.length !== 1 || !/^\d+$/.test(idText) || !values.verified) {
     fail(USAGE);
   }
   if (values.notes !== undefined && values["notes-file"] !== undefined) {

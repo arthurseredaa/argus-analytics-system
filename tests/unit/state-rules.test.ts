@@ -74,6 +74,12 @@ describe("state-rules check", () => {
   it("state-rules the $schema pointer is allowed", () => {
     expect(checkProgress({ ...fixture(), $schema: "./progress.schema.json" })).toEqual([]);
   });
+
+  it("state-rules a numeric $schema is an error", () => {
+    const errors = checkProgress({ ...fixture(), $schema: 5 });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("$schema");
+  });
 });
 
 describe("state-rules close", () => {

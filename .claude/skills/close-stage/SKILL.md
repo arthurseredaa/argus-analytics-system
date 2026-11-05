@@ -1,6 +1,6 @@
 ---
 name: close-stage
-description: Close the current stage of docs/plans/part2-mvp-stages.md: verify, record, commit, open the PR. Use when Arthur approves a stage or says "закриваємо етап".
+description: "Close the current stage of docs/plans/part2-mvp-stages.md: verify, record, commit, open the PR. Use when Arthur approves a stage or says \"закриваємо етап\"."
 ---
 
 # Close a stage
