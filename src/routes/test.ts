@@ -1,10 +1,11 @@
-// Route: GET /__test/state, GET /__test/health, POST /__test/reset and POST /__test/seed, answered only while TEST_ROUTES is "on".
-// Implements ADR 0003 (facts in D1); serves ID-1, ID-4, PB-3, OFF-3, OFF-4, R-12, DEMO-2.
+// Route: GET /__test/state, GET /__test/health, GET /__test/files, POST /__test/reset and POST /__test/seed, answered only while TEST_ROUTES is "on".
+// Implements ADR 0003 (facts in D1); serves ID-1, ID-4, PB-3, OFF-3, OFF-4, R-12, DEMO-2, DEMO-8.
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { readFacts } from "../db/facts.ts";
 import { readHealth } from "../events/health.ts";
+import { LOADED_PREFIX, PENDING_PREFIX, REJECTED_PREFIX } from "../events/files.ts";
 import { readTestEvents, readTestState, resetTestData, seedTestUser } from "../db/test-state.ts";
 import {
   ConfigError,
@@ -36,6 +37,32 @@ async function partnerSecretsOk(masterKey: string, secrets: readonly string[]): 
   } catch {
     return false;
   }
+}
+
+// The most keys /files lists in one answer; a remote scan fetches each one.
+const FILES_LIMIT = 1000;
+
+// Keys under the three event prefixes uploaded at or after `since`, in key order (the prefixes are
+// visited in alphabetical order), at most `max`.
+async function filesSince(
+  bucket: R2Bucket,
+  since: number,
+  max: number,
+): Promise<{ keys: string[]; truncated: boolean }> {
+  const keys: string[] = [];
+  for (const prefix of [LOADED_PREFIX, PENDING_PREFIX, REJECTED_PREFIX]) {
+    let cursor: string | undefined;
+    do {
+      const page = await bucket.list({ prefix, ...(cursor === undefined ? {} : { cursor }) });
+      for (const object of page.objects) {
+        if (object.uploaded.getTime() < since) continue;
+        if (keys.length === max) return { keys, truncated: true };
+        keys.push(object.key);
+      }
+      cursor = page.truncated ? page.cursor : undefined;
+    } while (cursor !== undefined);
+  }
+  return { keys, truncated: false };
 }
 
 export function testRoute(): Hono<AppEnv> {
@@ -72,6 +99,16 @@ export function testRoute(): Hono<AppEnv> {
   route.get("/health", async (c) => {
     c.header("cache-control", "no-store");
     return c.json(await readHealth(c.env, Date.now()));
+  });
+
+  // The event files written since a time, keys only: wrangler cannot list a bucket, and the remote
+  // email scan (DEMO-8) fetches each key itself.
+  route.get("/files", async (c) => {
+    const raw = c.req.query("since");
+    if (raw === undefined || !/^\d{1,15}$/.test(raw))
+      return c.json({ error: "invalid_query" }, 400);
+    c.header("cache-control", "no-store");
+    return c.json(await filesSince(c.env.EVENTS_BUCKET, Number(raw), FILES_LIMIT));
   });
 
   route.post("/reset", async (c) => {

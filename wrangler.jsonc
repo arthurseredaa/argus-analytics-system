@@ -11,7 +11,24 @@
   },
   // TEST_ROUTES is "off" here (R-12: /__test/* answers 404). The CI deploy turns it on for the
   // demo (decision 1 of the stage 1 plan); a production deploy drops that flag.
-  "vars": { "GIT_SHA": "dev", "TEST_ROUTES": "off" },
+  "vars": {
+    "GIT_SHA": "dev",
+    "TEST_ROUTES": "off",
+    // Alert thresholds (stage 6 plan, decision 8). The values are the rows of docs/requirements/nfr.md,
+    // "Set in stage 4"; tests/unit/wrangler-config.test.ts pins them. d1_events_size_bytes is the Paid
+    // value; the Free plan uses 350000000. The alerts that fire on "any" have no threshold here.
+    "ALERT_THRESHOLDS": {
+      "freshness_lag_ms": 900000,
+      "pending_oldest_file_ms": 3600000,
+      "postbacks_min_requests": 5,
+      "postbacks_window_ms": 900000,
+      "d1_facts_size_bytes": 7000000000,
+      "d1_events_size_bytes": 7000000000,
+      "selection_p95_ms": 300,
+      "worker_5xx_rate": 0.01,
+      "d1_overload_errors_per_hour": 10,
+    },
+  },
   "d1_databases": [
     {
       // ADR 0003: facts in D1.
@@ -30,7 +47,12 @@
   ],
   "queues": {
     // ADR 0005: event ingestion queue.
-    "producers": [{ "binding": "EVENTS_QUEUE", "queue": "events" }],
+    "producers": [
+      { "binding": "EVENTS_QUEUE", "queue": "events" },
+      // Nothing sends to events-dlq and nothing consumes it. The binding exists only so the alert run
+      // can read Queue.metrics().backlogCount for dlq_not_empty (stage 6 plan, decision 13).
+      { "binding": "EVENTS_DLQ", "queue": "events-dlq" },
+    ],
     "consumers": [
       {
         "queue": "events",
@@ -41,8 +63,9 @@
       },
     ],
   },
-  // ADR 0005, ADR 0006: the loader, every minute in the MVP.
-  "triggers": { "crons": ["* * * * *"] },
+  // ADR 0005, ADR 0006: the loader, every minute in the MVP. The second cron runs the alert evaluator
+  // (src/ops/alerts.ts) every 5 minutes; src/index.ts tells the two apart by controller.cron.
+  "triggers": { "crons": ["* * * * *", "*/5 * * * *"] },
   "r2_buckets": [
     // ADR 0005: raw event archive. The 30-day lifecycle rules for loaded/ and rejected/ are not in
     // this file; they are applied once to the account (decision 16 of the stage 5 plan).

@@ -11,13 +11,14 @@ async function tableNames(db: D1Database): Promise<string[]> {
   return results.map((r) => r.name);
 }
 
-it("MVP-2 facts database has the eight tables of the data model", async () => {
+it("MVP-2 facts database has the nine tables of the data model", async () => {
   expect(await tableNames(env.FACTS)).toEqual([
     "catalog_history",
     "clicks",
     "conversions",
     "offers",
     "partners",
+    "postback_counts",
     "quarantine",
     "user_answers",
     "users",
@@ -51,7 +52,14 @@ it("MVP-2 events rejects an event without event_id", async () => {
 });
 
 it("MVP-2 the worker has every binding the design names", () => {
-  for (const name of ["FACTS", "EVENTS", "EVENTS_QUEUE", "EVENTS_BUCKET", "METRICS"]) {
+  for (const name of [
+    "FACTS",
+    "EVENTS",
+    "EVENTS_QUEUE",
+    "EVENTS_DLQ",
+    "EVENTS_BUCKET",
+    "METRICS",
+  ]) {
     expect(env[name as keyof Env], name).toBeDefined();
   }
 });

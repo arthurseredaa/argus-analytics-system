@@ -7,10 +7,12 @@ import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { findClickForPostback } from "../db/clicks.ts";
 import { insertConversion, insertQuarantine, readPartner } from "../db/conversions.ts";
+import { recordPostback } from "../db/postback-counts.ts";
 import { ConfigError, decrypt, importAesKey } from "../domain/crypto.ts";
 import { verifySignature } from "../domain/signature.ts";
 import { derivedEventId, makeServerEvent } from "../events/envelope.ts";
 import { EventsUnavailable, sendEvent } from "../events/producer.ts";
+import { isD1Overload } from "../ops/metrics.ts";
 
 export const MAX_POSTBACK_BYTES = 16_384;
 const PARTNER_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -46,9 +48,10 @@ type Answer = {
 };
 
 // A D1 call failed; the partner retries after Retry-After.
+// The D1 error stays as `cause` so the route can tag an overload; it is never logged.
 class Unavailable extends Error {
-  constructor() {
-    super("facts database unavailable");
+  constructor(cause: unknown) {
+    super("facts database unavailable", { cause });
     this.name = "Unavailable";
   }
 }
@@ -56,8 +59,8 @@ class Unavailable extends Error {
 async function d1<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
-  } catch {
-    throw new Unavailable();
+  } catch (err) {
+    throw new Unavailable(err);
   }
 }
 
@@ -253,6 +256,7 @@ export function postbackRoute(): Hono<AppEnv> {
       answer = await handle(c);
     } catch (err) {
       if (!(err instanceof Unavailable)) throw err;
+      if (isD1Overload(err.cause)) c.set("errorTag", "d1_overload");
       answer = {
         status: 503,
         body: { error: "unavailable" },
@@ -260,6 +264,24 @@ export function postbackRoute(): Hono<AppEnv> {
         outcome: "rejected",
         reason: "d1_unavailable",
       };
+    }
+    // Only a partner found in `partners` is counted, so random traffic cannot fill the table.
+    // `accepted` and `duplicate` are acceptances; every other outcome is a request only.
+    if (answer.partner !== null) {
+      const partnerId = answer.partner;
+      const accepted = answer.outcome === "accepted" || answer.outcome === "duplicate";
+      c.executionCtx.waitUntil(
+        recordPostback(c.env.FACTS, { at: Date.now(), partnerId, accepted }).catch(
+          (err: unknown) => {
+            console.log(
+              JSON.stringify({
+                msg: "postback_count_failed",
+                name: err instanceof Error ? err.name : "unknown",
+              }),
+            );
+          },
+        ),
+      );
     }
     // One line per request. It never carries the body, the signature or the transaction id.
     console.log(

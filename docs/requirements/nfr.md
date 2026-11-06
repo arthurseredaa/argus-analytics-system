@@ -55,6 +55,8 @@ Set on 2026-11-03 in stage 4 of `docs/plans/part1-design-document.md`. The defin
 | NFR-6 | Selection p95 alert (`selection_p95`) | above 300 ms over 15 minutes | same as the target | ADR 0003 migration trigger two |
 | NFR-6 | D1 overload alert (`d1_overload_errors`) | more than 10 in an hour | a starting value | ADR 0003 migration trigger three; Arthur's decision, 2026-11-03 |
 | NFR-6 | Worker error alert (`worker_5xx_rate`) | above 1% of requests over 5 minutes | | Arthur's decision, 2026-11-03 |
+| NFR-6 | Alert SQL queries against the Analytics Engine read limits | 864 queries a day, within the 10,000 a day of the Free plan | 3 queries × 12 runs an hour × 24 hours | Part 2 stage 6, decision 16 |
+| PB-3 | Alert `postbacks_without_conversions` | at least 5 postback requests in 15 minutes from one partner and none accepted | the request count is kept per partner and minute in `postback_counts` | Part 2 stage 6, part2-mvp-stages.md |
 | DES-6 | Observed EPU window and threshold | trailing 30 days by click date; observed EPU replaces the constant when the window has at least 500 users (a starting value) | | Arthur's decision, 2026-11-03 |
 | NFR-1 | R2 operations at the design load | about 215,000 Class A and 180,000 Class B a month, within the free 1M and 10M: $0 | 18M / 100 events per file = 180,000 writes; 8,640 loader runs × about 4 lists and writes = about 35,000; each file read once | platform limits, R2 |
 | NFR-1 | R2 storage at the design load | about 18 GB-month, $0.12 a month | `loaded/` kept 30 days × 0.6 GB a day at 1 KB per event; (18 − 10 free) × $0.015 | platform limits, R2; ADR 0006 |
