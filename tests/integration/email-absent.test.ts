@@ -29,6 +29,7 @@ const logged: string[] = [];
 const urls: string[] = [];
 const locations: string[] = [];
 const bodies: string[] = [];
+const responses: string[] = [];
 const points: string[] = [];
 let spies: MockInstance<(...data: unknown[]) => void>[] = [];
 
@@ -51,6 +52,7 @@ beforeAll(async () => {
     const res = await call(path, init, override);
     const location = res.headers.get("location");
     if (location !== null) locations.push(location);
+    responses.push(await res.clone().text());
     return res;
   };
 
@@ -63,7 +65,9 @@ beforeAll(async () => {
     browserEvent({ type, seq, visit_id: visit, payload });
   const post = async (body: Record<string, unknown>) => {
     urls.push("https://example.com/api/events");
-    return postEvent(body, cookie, override);
+    const res = await postEvent(body, cookie, override);
+    responses.push(await res.clone().text());
+    return res;
   };
   await post(event(1, "step_viewed", { step: 1, prefilled: false }));
   await post(event(2, "step_answered", { step: 1, question_key: "gender", value: "women" }));
@@ -84,7 +88,7 @@ beforeAll(async () => {
   const go = await send(`/go?prelander=demo&visit=${visit}`, { cookie });
   const clickId = /[?&]click_id=([0-9a-f]{32})$/.exec(go.headers.get("location") ?? "")?.[1] ?? "";
   urls.push("https://example.com/postback/v1/partnerA");
-  await postback("partnerA", leadBody(clickId), {}, override);
+  responses.push(await (await postback("partnerA", leadBody(clickId), {}, override)).text());
 
   // The failure paths: invalid JSON around the address, and an email key in an event payload.
   await send("/api/complete", {
@@ -118,6 +122,13 @@ describe("the address and the user id in everything the Worker says", () => {
     expect(urls.length).toBeGreaterThan(5);
     expect(locations.length).toBeGreaterThan(0);
     expectNone([...urls, ...locations]);
+  });
+
+  it("DEMO-8 R-12 email absent from every response body", () => {
+    // The entry HTML, the 400 answer to the invalid completion, the event and postback answers.
+    expect(responses.length).toBeGreaterThan(10);
+    expect(responses.some((text) => text.includes("<html"))).toBe(true);
+    expectNone(responses);
   });
 
   it("DEMO-8 R-12 email absent from Queue messages, R2 files and the events table", async () => {

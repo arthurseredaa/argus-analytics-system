@@ -76,7 +76,14 @@ describe("evaluateAlerts", () => {
       health: health({ freshness_ms: 900_001, pending_files: 0 }),
       queueBacklog: null,
     });
-    expect(ids(unknownBacklog)).toEqual(["freshness_lag"]);
+    // R10: an unreadable backlog is not waiting, so an idle system stays silent.
+    expect(ids(unknownBacklog)).toEqual([]);
+
+    const unknownBacklogFiles = readings({
+      health: health({ freshness_ms: 900_001, pending_files: 2 }),
+      queueBacklog: null,
+    });
+    expect(ids(unknownBacklogFiles)).toEqual(["freshness_lag"]);
 
     const emptyTable = readings({ health: health({ freshness_ms: null, pending_files: 1 }) });
     expect(ids(emptyTable)).toEqual([]);

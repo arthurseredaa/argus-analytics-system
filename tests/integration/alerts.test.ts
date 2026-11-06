@@ -10,7 +10,7 @@ import {
   WORKER_5XX_SQL,
   type AnalyticsSql,
 } from "../../src/db/analytics-engine.ts";
-import { ALERT_CRON, runAlerts } from "../../src/ops/alerts.ts";
+import { ALERT_CRON, WINDOW_LAG_MS, runAlerts } from "../../src/ops/alerts.ts";
 import { ALERT_STATE_KEY } from "../../src/events/files.ts";
 import {
   alertLines,
@@ -25,6 +25,8 @@ import { failingFacts, recordingDataset } from "../fixtures/metrics.ts";
 import { leadBody, postback } from "../fixtures/postback.ts";
 
 const HOUR = 3_600_000;
+// Each window ends this long before the run (WINDOW_LAG_MS in src/ops/alerts.ts).
+const LAG = 30_000;
 
 beforeEach(clearBucket);
 afterEach(() => {
@@ -115,14 +117,14 @@ describe("alert run", () => {
     await putAlertState({ checked_at: start - 1000, sizes_checked_at: start });
     await env.EVENTS_BUCKET.put(`rejected/t-${crypto.randomUUID()}.ndjson`, "{}\n");
 
-    await runAlerts(alertEnv(recordingDataset()), start + 1000);
+    await runAlerts(alertEnv(recordingDataset()), start + LAG + 1000);
     const first = alertLines(log).filter((l) => l["id"] === "rejected_new_file");
     expect(first).toHaveLength(1);
     expect(first[0]?.["value"]).toBe(1);
     expect(first[0]?.["threshold"]).toBe(0);
 
     log.mockClear();
-    await runAlerts(alertEnv(recordingDataset()), start + 2000);
+    await runAlerts(alertEnv(recordingDataset()), start + LAG + 2000);
     expect(alertLines(log).some((l) => l["id"] === "rejected_new_file")).toBe(false);
   });
 
@@ -138,13 +140,13 @@ describe("alert run", () => {
     expect(res.status).toBe(202);
     expect(await res.json()).toEqual({ status: "quarantined" });
 
-    await runAlerts(alertEnv(recordingDataset()), Date.now() + 1000);
+    await runAlerts(alertEnv(recordingDataset()), Date.now() + LAG + 1000);
     const first = alertLines(log).filter((l) => l["id"] === "quarantine_new_row");
     expect(first).toHaveLength(1);
     expect(first[0]?.["value"]).toBeGreaterThanOrEqual(1);
 
     log.mockClear();
-    await runAlerts(alertEnv(recordingDataset()), Date.now() + 2000);
+    await runAlerts(alertEnv(recordingDataset()), Date.now() + LAG + 2000);
     expect(alertLines(log).some((l) => l["id"] === "quarantine_new_row")).toBe(false);
 
     expect(log.mock.calls.some((args) => String(args[0]).includes("user1@example.com"))).toBe(
@@ -173,14 +175,17 @@ describe("alert run", () => {
         return typeof value === "function" ? value.bind(target) : value;
       },
     });
-    await runAlerts(alertEnv(recordingDataset(), { EVENTS_BUCKET: failingList }), start + 1000);
+    await runAlerts(
+      alertEnv(recordingDataset(), { EVENTS_BUCKET: failingList }),
+      start + LAG + 1000,
+    );
     expect(logLines(log, "alert_source_unavailable").map((l) => l["source"])).toContain("rejected");
     const state = await readState();
     expect(state["rejected_checked_at"]).toBe(start - 1000);
     expect(state["quarantine_checked_at"]).toBe(start + 1000);
 
     log.mockClear();
-    await runAlerts(alertEnv(recordingDataset()), start + 2000);
+    await runAlerts(alertEnv(recordingDataset()), start + LAG + 2000);
     expect(alertLines(log).filter((l) => l["id"] === "rejected_new_file")).toHaveLength(1);
     expect((await readState())["rejected_checked_at"]).toBe(start + 2000);
   });
@@ -196,7 +201,7 @@ describe("alert run", () => {
     const res = await postback("partnerA", leadBody(`unknown-${crypto.randomUUID()}`));
     expect(await res.json()).toEqual({ status: "quarantined" });
 
-    const failedAt = Date.now() + 1000;
+    const failedAt = Date.now() + LAG + 1000;
     await runAlerts(alertEnv(recordingDataset(), { FACTS: failingFacts() }), failedAt);
     expect(logLines(log, "alert_source_unavailable").map((l) => l["source"])).toContain(
       "quarantine",
@@ -216,13 +221,98 @@ describe("alert run", () => {
     await putAlertState({ checked_at: start - 1000, sizes_checked_at: start });
     await env.EVENTS_BUCKET.put(`rejected/t-${crypto.randomUUID()}.ndjson`, "{}\n");
 
-    await runAlerts(alertEnv(recordingDataset()), start + 1000);
+    await runAlerts(alertEnv(recordingDataset()), start + LAG + 1000);
 
     expect(alertLines(log).filter((l) => l["id"] === "rejected_new_file")).toHaveLength(1);
     const state = await readState();
     expect(state["rejected_checked_at"]).toBe(start + 1000);
     expect(state["quarantine_checked_at"]).toBe(start + 1000);
     expect(state).not.toHaveProperty("checked_at");
+  });
+
+  it("NFR-5 each window ends 30 seconds before the run and that end is the next start", async () => {
+    const log = vi.spyOn(console, "log");
+    expect(WINDOW_LAG_MS).toBe(LAG);
+    const start = Date.now();
+    await putAlertState({
+      rejected_checked_at: start - 1000,
+      quarantine_checked_at: start - 1000,
+      sizes_checked_at: start,
+    });
+    await env.EVENTS_BUCKET.put(`rejected/t-${crypto.randomUUID()}.ndjson`, "{}\n");
+
+    // The file was uploaded about `start`, inside the last 30 seconds of this run: not counted yet.
+    await runAlerts(alertEnv(recordingDataset()), start + 10_000);
+    expect(alertLines(log).some((l) => l["id"] === "rejected_new_file")).toBe(false);
+    expect((await readState())["rejected_checked_at"]).toBe(start + 10_000 - LAG);
+
+    // The next window starts where the last one ended, so the file is counted once.
+    await runAlerts(alertEnv(recordingDataset()), start + 60_000);
+    expect(alertLines(log).filter((l) => l["id"] === "rejected_new_file")).toHaveLength(1);
+    expect((await readState())["rejected_checked_at"]).toBe(start + 60_000 - LAG);
+  });
+
+  it("NFR-5 a read error on the state aborts the run and leaves the state as it was", async () => {
+    const log = vi.spyOn(console, "log");
+    const start = Date.now();
+    const state = {
+      rejected_checked_at: start - 5000,
+      quarantine_checked_at: start - 4000,
+      sizes_checked_at: start - 3000,
+    };
+    await putAlertState(state);
+    const unreadable = new Proxy(env.EVENTS_BUCKET, {
+      get: (target, prop) => {
+        if (prop === "get")
+          return async () => {
+            throw new Error("r2 get down");
+          };
+        const value = Reflect.get(target, prop, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+
+    await expect(
+      runAlerts(alertEnv(recordingDataset(), { EVENTS_BUCKET: unreadable }), start + LAG + 1000),
+    ).rejects.toThrow("r2 get down");
+
+    expect(await readState()).toEqual(state);
+    expect(logLines(log, "alert_run")).toHaveLength(0);
+  });
+
+  it("NFR-5 a malformed state object is read as no state", async () => {
+    const log = vi.spyOn(console, "log");
+    await env.EVENTS_BUCKET.put(ALERT_STATE_KEY, "{not json");
+
+    await runAlerts(alertEnv(recordingDataset()), Date.now());
+
+    expect(logLines(log, "alert_run")).toHaveLength(1);
+    expect(await readState()).toHaveProperty("rejected_checked_at");
+  });
+
+  it("NFR-3 R10 freshness_lag ignores an unreadable Queue backlog and counts files in pending", async () => {
+    const log = vi.spyOn(console, "log");
+    await putPending([storedEvent()]);
+    await loadNow();
+    const lateRun = Date.now() + 16 * 60_000;
+
+    await runAlerts(
+      alertEnv(recordingDataset(), { EVENTS_QUEUE: queueWithoutMetrics() }),
+      lateRun,
+      quietSql,
+    );
+    expect(logLines(log, "alert_source_unavailable").map((l) => l["source"])).toContain(
+      "events_queue",
+    );
+    expect(alertLines(log).some((l) => l["id"] === "freshness_lag")).toBe(false);
+
+    await putPending([storedEvent()]);
+    await runAlerts(
+      alertEnv(recordingDataset(), { EVENTS_QUEUE: queueWithoutMetrics() }),
+      lateRun,
+      quietSql,
+    );
+    expect(alertLines(log).some((l) => l["id"] === "freshness_lag")).toBe(true);
   });
 
   it("NFR-5 dlq_not_empty fires on messages in the dead letter queue", async () => {

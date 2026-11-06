@@ -21,6 +21,9 @@ export const SIZE_CHECK_EVERY_MS = 86_400_000;
 const POSTBACK_COUNTS_KEEP_MS = 86_400_000;
 // A run with no stored state looks this far back for new files and rows.
 export const LOOK_BACK_MS = 300_000;
+// A window ends this far before the run starts, and that end is the next window's start. A row or file
+// that was in flight at the start of the run is then inside a later window instead of falling between two.
+export const WINDOW_LAG_MS = 30_000;
 
 // Counting of `rejected/` stops here; a bucket with more files than this is already an incident.
 const REJECTED_LIST_MAX = 10_000;
@@ -91,10 +94,12 @@ const above = (id: AlertId, value: number | null, threshold: number): AlertFirin
   value !== null && value > threshold ? [{ id, value, threshold }] : [];
 
 // The newest events row is older than the limit and something is waiting to be loaded. An idle system
-// has an old newest row and nothing waiting, and must stay silent. An unreadable Queue backlog counts as waiting.
+// has an old newest row and nothing waiting, and must stay silent. An unreadable Queue backlog (null) is
+// not waiting (ruling R10): without `Queue.metrics()` only files in `pending/` count, rather than a lag alert
+// that fires every run on an idle system.
 const freshnessLag: Rule = ({ health, queueBacklog }, t) => {
   if (health === null) return [];
-  const waiting = health.pending_files > 0 || queueBacklog === null || queueBacklog > 0;
+  const waiting = health.pending_files > 0 || (queueBacklog !== null && queueBacklog > 0);
   return waiting ? above("freshness_lag", health.freshness_ms, t.freshness_lag_ms) : [];
 };
 
@@ -176,12 +181,15 @@ function sqlClient(env: AlertEnv): AnalyticsSql | null {
   return analyticsSql({ accountId, token });
 }
 
+// Null for a missing or malformed object. An R2 error propagates: the run aborts and the state stays as it
+// was, instead of the run taking a default window and overwriting an older one kept by a failed source.
 async function readState(bucket: R2Bucket): Promise<AlertState | null> {
+  const object = await bucket.get(ALERT_STATE_KEY);
+  if (object === null) return null;
+  const text = await object.text();
   try {
-    const object = await bucket.get(ALERT_STATE_KEY);
-    if (object === null) return null;
     // An older state has one `checked_at` for both windows.
-    const parsed = JSON.parse(await object.text()) as Partial<AlertState> & { checked_at?: number };
+    const parsed = JSON.parse(text) as Partial<AlertState> & { checked_at?: number };
     const rejected = parsed.rejected_checked_at ?? parsed.checked_at;
     const quarantine = parsed.quarantine_checked_at ?? parsed.checked_at;
     if (
@@ -252,6 +260,7 @@ export async function runAlerts(
   }
 
   const state = await readState(env.EVENTS_BUCKET);
+  const windowEnd = now - WINDOW_LAG_MS;
   const rejectedAfter = state?.rejected_checked_at ?? now - LOOK_BACK_MS;
   const quarantineAfter = state?.quarantine_checked_at ?? now - LOOK_BACK_MS;
   const sizesDue = state === null || now - state.sizes_checked_at >= SIZE_CHECK_EVERY_MS;
@@ -262,15 +271,15 @@ export async function runAlerts(
       readHealth(env, now),
     ),
     readSource("rejected", ["rejected_new_file"], () =>
-      countRejectedBetween(env.EVENTS_BUCKET, rejectedAfter, now),
+      countRejectedBetween(env.EVENTS_BUCKET, rejectedAfter, windowEnd),
     ),
     readSource("quarantine", ["quarantine_new_row"], () =>
-      countQuarantineBetween(env.FACTS, quarantineAfter, now),
+      countQuarantineBetween(env.FACTS, quarantineAfter, windowEnd),
     ),
     readSource("postback_counts", ["postbacks_without_conversions"], () =>
       postbackCountsSince(env.FACTS, now - thresholds.postbacks_window_ms),
     ),
-    // An unreadable backlog makes freshness_lag fire as if messages wait, so it is listed here.
+    // Without the backlog, freshness_lag counts only files in `pending/` (ruling R10).
     readSource("events_queue", ["freshness_lag"], () => readQueue(env.EVENTS_QUEUE, now)),
     readSource("dlq", ["dlq_not_empty"], () => readQueue(env.EVENTS_DLQ, now)),
     readSource(
@@ -355,8 +364,8 @@ export async function runAlerts(
   // Last, so a run that throws looks at the same window again. A source that failed keeps its old
   // window start, so the next run reads the missed window; a failed size read stays due.
   const next: AlertState = {
-    rejected_checked_at: rejected.failure === null ? now : rejectedAfter,
-    quarantine_checked_at: quarantine.failure === null ? now : quarantineAfter,
+    rejected_checked_at: rejected.failure === null ? windowEnd : rejectedAfter,
+    quarantine_checked_at: quarantine.failure === null ? windowEnd : quarantineAfter,
     sizes_checked_at: sizes.value === null ? (state?.sizes_checked_at ?? 0) : now,
   };
   await env.EVENTS_BUCKET.put(ALERT_STATE_KEY, JSON.stringify(next));

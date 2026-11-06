@@ -19,8 +19,11 @@ function tmpDir(...files: [string, string][]): string {
   return dir;
 }
 
+// The macOS bash 3.2 when there is one, because the script has to run on it; CI's /bin/bash is 5.
+const bash = fs.existsSync("/bin/bash") ? "/bin/bash" : "bash";
+
 function scan(args: string[], env: Record<string, string> = {}) {
-  return spawnSync("bash", [script, ...args], {
+  return spawnSync(bash, [script, ...args], {
     cwd: root,
     encoding: "utf8",
     env: { ...process.env, BASE: "", ...env },
@@ -28,22 +31,47 @@ function scan(args: string[], env: Record<string, string> = {}) {
   });
 }
 
-// The fakes: curl answers the listing from $FAKE_FILES; pnpm answers an R2 get from $FAKE_DIR/<key
-// with / as _>, and a D1 dump from $FAKE_ROWS. Every call is appended to $FAKE_CALLS.
-function remote(options: { files: string; r2?: Record<string, string>; rows?: unknown[] }) {
-  const dir = tmpDir(["tail.log", '{"logs":[]}\n{"logs":[]}\n']);
+// The fakes: curl answers the health route from $FAKE_DIR/health.seq (one pending_files value per call, the
+// last one repeats) and the listing from $FAKE_DIR/files.json; pnpm answers an R2 get from $FAKE_DIR/<key with
+// / as _> (a missing file is the "does not exist" error of wrangler, a <file>.fail marker is a login error),
+// and a D1 dump from $FAKE_DIR/rows.json. Every call is appended to $FAKE_CALLS.
+function remote(options: {
+  files: string;
+  r2?: Record<string, string>;
+  rows?: unknown[];
+  rowsText?: string;
+  tail?: string;
+  pending?: number[];
+  path?: string;
+}) {
+  const dir = tmpDir(["tail.log", options.tail ?? '{"logs":[]}\n{"logs":[]}\n']);
   const bin = path.join(dir, "bin");
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(dir, "files.json"), options.files);
+  fs.writeFileSync(path.join(dir, "health.seq"), `${(options.pending ?? [0]).join("\n")}\n`);
   fs.writeFileSync(
     path.join(dir, "rows.json"),
-    JSON.stringify([{ results: options.rows ?? [], success: true }]),
+    options.rowsText ??
+      JSON.stringify([{ results: options.rows ?? [{ event_id: "e0" }], success: true }]),
   );
   for (const [key, text] of Object.entries(options.r2 ?? {}))
     fs.writeFileSync(path.join(dir, key.replaceAll("/", "_")), text);
   fs.writeFileSync(
     path.join(bin, "curl"),
-    '#!/bin/bash\necho "curl $*" >> "$FAKE_CALLS"\ncat "$FAKE_DIR/files.json"\n',
+    [
+      "#!/bin/bash",
+      'echo "curl $*" >> "$FAKE_CALLS"',
+      'case "$*" in',
+      "  *__test/health*)",
+      '    n="$(cat "$FAKE_DIR/health.count" 2>/dev/null || echo 0)"',
+      '    echo $((n + 1)) > "$FAKE_DIR/health.count"',
+      '    value="$(sed -n "$((n + 1))p" "$FAKE_DIR/health.seq")"',
+      '    [ -n "$value" ] || value="$(tail -n 1 "$FAKE_DIR/health.seq")"',
+      '    echo "{\\"pending_files\\":$value}" ;;',
+      '  *) cat "$FAKE_DIR/files.json" ;;',
+      "esac",
+      "",
+    ].join("\n"),
     { mode: 0o755 },
   );
   fs.writeFileSync(
@@ -52,7 +80,9 @@ function remote(options: { files: string; r2?: Record<string, string>; rows?: un
       "#!/bin/bash",
       'echo "pnpm $*" >> "$FAKE_CALLS"',
       'case "$*" in',
-      '  *"r2 object get"*) key="${7#*/}"; cat "$FAKE_DIR/${key//\\//_}" ;;',
+      '  *"r2 object get"*) key="${7#*/}"; file="$FAKE_DIR/${key//\\//_}"',
+      '    if [ -f "$file.fail" ]; then echo "You are not logged in." >&2; exit 1; fi',
+      '    if [ -f "$file" ]; then cat "$file"; else echo "The specified key does not exist." >&2; exit 1; fi ;;',
       '  *"d1 execute"*) cat "$FAKE_DIR/rows.json" ;;',
       "  *) exit 1 ;;",
       "esac",
@@ -63,9 +93,11 @@ function remote(options: { files: string; r2?: Record<string, string>; rows?: un
   const calls = path.join(dir, "calls.log");
   const run = scan(["--remote", path.join(dir, "tail.log"), "--since", "1762300000000"], {
     BASE: "https://worker.invalid",
-    PATH: `${bin}:${process.env.PATH ?? ""}`,
+    PATH: options.path ?? `${bin}:${process.env.PATH ?? ""}`,
     FAKE_DIR: dir,
     FAKE_CALLS: calls,
+    EMAIL_SCAN_POLL_SECONDS: "1",
+    EMAIL_SCAN_WAIT_SECONDS: "2",
   });
   return { run, calls: fs.existsSync(calls) ? fs.readFileSync(calls, "utf8") : "" };
 }
@@ -132,6 +164,8 @@ describe("remote email scan", () => {
     expect(run.status).toBe(0);
     expect(run.stdout).toContain("email-scan: clean (tail 2 lines, 2 R2 files, 3 events rows)");
     expect(calls).toContain("curl");
+    expect(calls.indexOf("/__test/health")).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf("/__test/health")).toBeLessThan(calls.indexOf("/__test/files"));
     expect(calls).toContain("/__test/files?since=1762300000000");
     expect(calls).not.toMatch(/curl .*(-L|--location)( |$)/);
     expect(calls).toContain("funnels-events/pending/a.ndjson --remote --pipe");
@@ -175,5 +209,102 @@ describe("remote email scan", () => {
     const run = remote({ files: listing(["../../etc/passwd"]) });
     expect(run.run.status).toBe(2);
     expect(run.calls).not.toContain("r2 object get");
+  });
+
+  it("DEMO-8 a remote scan waits for pending files to drain before it lists the keys", () => {
+    const { run, calls } = remote({
+      files: listing(["loaded/b.ndjson"]),
+      r2: { "loaded/b.ndjson": "{}\n" },
+      pending: [3, 1, 0],
+    });
+    expect(run.status).toBe(0);
+    expect(calls.match(/__test\/health/g)).toHaveLength(3);
+    expect(calls.lastIndexOf("/__test/health")).toBeLessThan(calls.indexOf("/__test/files"));
+  });
+
+  it("DEMO-8 a remote scan that still sees pending files after the wait exits 2 and lists nothing", () => {
+    const { run, calls } = remote({
+      files: listing(["pending/a.ndjson"]),
+      r2: { "pending/a.ndjson": "{}\n" },
+      pending: [4],
+    });
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain("pending/ still holds files");
+    expect(run.stdout).not.toContain("clean");
+    expect(calls).not.toContain("/__test/files");
+    expect(calls).not.toContain("r2 object get");
+  });
+
+  it("DEMO-8 a remote scan skips a key that moved to loaded and counts the files it fetched", () => {
+    const { run, calls } = remote({
+      files: listing(["pending/gone.ndjson", "loaded/b.ndjson", "loaded/c.ndjson"]),
+      r2: { "loaded/b.ndjson": "{}\n", "loaded/c.ndjson": "{}\n" },
+    });
+    expect(run.status).toBe(0);
+    expect(calls).toContain("funnels-events/pending/gone.ndjson --remote --pipe");
+    expect(run.stderr).toContain("pending/gone.ndjson is gone");
+    expect(run.stdout).toContain("2 R2 files");
+  });
+
+  it("DEMO-8 a remote scan where every key is gone, or a get fails for another reason, exits 2", () => {
+    const allGone = remote({ files: listing(["pending/gone.ndjson"]) });
+    expect(allGone.run.status).toBe(2);
+    expect(allGone.run.stdout).not.toContain("clean");
+    expect(allGone.calls).not.toContain("d1 execute");
+
+    const failing = remote({
+      files: listing(["loaded/b.ndjson"]),
+      r2: { "loaded/b.ndjson": "{}\n", "loaded_b.ndjson.fail": "" },
+    });
+    expect(failing.run.status).toBe(2);
+    expect(failing.run.stderr).toContain("cannot read loaded/b.ndjson");
+  });
+
+  it("DEMO-8 a remote scan with an empty tail log exits 2 and names the tail", () => {
+    const { run } = remote({
+      files: listing(["loaded/b.ndjson"]),
+      r2: { "loaded/b.ndjson": "{}\n" },
+      tail: "",
+    });
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain("tail log has 0 lines");
+    expect(run.stdout).not.toContain("clean");
+  });
+
+  it("DEMO-8 a remote scan with 0 events rows exits 2 and names the events query", () => {
+    const { run } = remote({
+      files: listing(["loaded/b.ndjson"]),
+      r2: { "loaded/b.ndjson": "{}\n" },
+      rows: [],
+    });
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain("events query returned 0 rows");
+    expect(run.stdout).not.toContain("clean");
+  });
+
+  it("DEMO-8 a remote scan without jq, or with a d1 answer that is not JSON, exits 2 with a message", () => {
+    const noJq = remote({
+      files: listing(["loaded/b.ndjson"]),
+      r2: { "loaded/b.ndjson": "{}\n" },
+      path: tmpDir(),
+    });
+    expect(noJq.run.status).toBe(2);
+    expect(noJq.run.stderr).toContain("jq is required");
+
+    const notJson = remote({
+      files: listing(["loaded/b.ndjson"]),
+      r2: { "loaded/b.ndjson": "{}\n" },
+      rowsText: "wrangler is not logged in\n",
+    });
+    expect(notJson.run.status).toBe(2);
+    expect(notJson.run.stderr).toContain("not the JSON");
+    expect(notJson.run.stdout).not.toContain("clean");
+  });
+
+  it("DEMO-8 a remote scan with nothing after --remote is a usage error, not an unbound variable", () => {
+    const run = scan(["--remote"], { BASE: "https://worker.invalid" });
+    expect(run.status).toBe(2);
+    expect(run.stderr).toContain("usage");
+    expect(run.stderr).not.toContain("unbound");
   });
 });
