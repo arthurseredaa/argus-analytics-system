@@ -43,7 +43,10 @@ export function queueWithoutMetrics(): Queue {
   } as unknown as Queue;
 }
 
-export async function putAlertState(state: AlertState): Promise<void> {
+// `{ checked_at, sizes_checked_at }` is the state an older run wrote.
+export async function putAlertState(
+  state: AlertState | { checked_at: number; sizes_checked_at: number },
+): Promise<void> {
   await env.EVENTS_BUCKET.put(ALERT_STATE_KEY, JSON.stringify(state));
 }
 

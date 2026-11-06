@@ -1,5 +1,5 @@
 // Route: GET /__probe, the synthetic probe's target.
-// Implements metrics-and-operations.md "Latency target" step 4; serves NFR-6.
+// Implements the design in metrics-and-operations.md "Latency target" step 4; serves NFR-6.
 // No identity middleware, no cookie, no event and no write: the fixed UserID has no rows.
 import { Hono } from "hono";
 import type { AppEnv } from "../app.ts";

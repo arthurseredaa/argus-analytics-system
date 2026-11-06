@@ -251,7 +251,7 @@ CREATE TABLE quarantine (
 
 - Put there by ADR 0007 (as `postback_quarantine`), for Q-11.
 - Written by the postback endpoint when a correctly signed postback names a click ID that is not in `clicks`: a click removed by the cleanup, a partner integration error, or a forgery. The answer is `202`, so the partner stops retrying, and an alert fires on any new row.
-- `click_id` has no foreign key, because the row exists exactly when the referenced click does not. A quarantined postback is never matched to a user by anything other than the click ID, is not counted, and emits no event.
+- `click_id` has no foreign key, because the row exists exactly when the referenced click does not. A quarantined postback is never matched to a user by anything other than the click ID, is not counted as a conversion, and emits no event.
 - No unique key: a partner that redelivers an unknown-click postback adds a second row, which is harmless because nothing here is counted.
 - Read by an operator. If the click turns out to exist after all, the postback can be resent through the normal endpoint.
 
@@ -299,7 +299,7 @@ All event files live in the one bucket `funnels-events`. The keys are defined in
 | `rejected/<batch_id>-invalid.ndjson` | the loader | raw lines that failed validation |
 | `control/loader-paused` | an operator | the pause flag; the loader skips a run while it exists |
 | `control/last-load.json` | the loader | `{ at, files, rows }` of the last run that loaded a batch |
-| `control/alert-state.json` | the alert run | `{ checked_at, sizes_checked_at }`: the end of the last alert window and the last time both D1 sizes were read |
+| `control/alert-state.json` | the alert run | `{ rejected_checked_at, quarantine_checked_at, sizes_checked_at }`: the end of the last window read for `rejected/`, the end of the last window read for `quarantine`, and the last time both D1 sizes were read. A source that failed keeps its old value, so the next run reads the missed window |
 
 Lifecycle: `loaded/` and `rejected/` expire after 30 days, through the bucket rules `loaded-30d` and `rejected-30d`. R2 lifecycle rules have no field in `wrangler.jsonc`, so they are applied once to the account with `wrangler r2 bucket lifecycle add`. Nothing deletes `pending/` or `batches/` automatically (ADR 0006).
 

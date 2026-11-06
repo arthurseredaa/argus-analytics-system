@@ -131,7 +131,14 @@ export async function recordLoaderRun(
   run: LoaderRun,
   now: number,
 ): Promise<void> {
-  const newest = await newestEventAt(env.EVENTS);
+  // An unreadable events database is an unknown freshness (-1), not a lost point: the run's status still matters.
+  let newest: number | null = null;
+  try {
+    newest = await newestEventAt(env.EVENTS);
+  } catch (err) {
+    const name = err instanceof Error ? err.name : "unknown";
+    console.log(JSON.stringify({ msg: "metrics_read_failed", name }));
+  }
   writePoint(
     env.METRICS,
     loaderPoint({

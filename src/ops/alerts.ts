@@ -1,5 +1,5 @@
 // Ops: the alert evaluator that runs on the */5 cron, with the checks the Worker can make directly.
-// Implements metrics-and-operations.md "Alerts", ADR 0005 and ADR 0006 "Watch"; serves NFR-3, NFR-5, NFR-6, MVP-5, PB-4, Q-11.
+// Implements metrics-and-operations.md "Alerts", ADR 0005 and ADR 0006 "Watch"; serves NFR-3, NFR-5, NFR-6, MVP-5, PB-3, PB-4, Q-11.
 // An alert is a rule over `AlertReadings`. A reading that is `null` is unknown or not due, and an unknown reading never fires.
 import { z } from "zod";
 import { countQuarantineBetween, databaseSize } from "../db/ops.ts";
@@ -58,8 +58,13 @@ export function parseThresholds(raw: unknown): AlertThresholds | null {
   return parsed.success ? parsed.data : null;
 }
 
-// `checked_at` ends the window of the last run; `sizes_checked_at` is the last time both D1 sizes were read.
-export type AlertState = { checked_at: number; sizes_checked_at: number };
+// Each `*_checked_at` ends the last window that was read for that source, so a failed source keeps its old
+// value and the next run looks at the missed window again. `sizes_checked_at` is the last time both D1 sizes were read.
+export type AlertState = {
+  rejected_checked_at: number;
+  quarantine_checked_at: number;
+  sizes_checked_at: number;
+};
 
 export type AlertReadings = {
   health: PipelineHealth | null;
@@ -175,10 +180,21 @@ async function readState(bucket: R2Bucket): Promise<AlertState | null> {
   try {
     const object = await bucket.get(ALERT_STATE_KEY);
     if (object === null) return null;
-    const parsed = JSON.parse(await object.text()) as Partial<AlertState>;
-    if (typeof parsed.checked_at !== "number" || typeof parsed.sizes_checked_at !== "number")
+    // An older state has one `checked_at` for both windows.
+    const parsed = JSON.parse(await object.text()) as Partial<AlertState> & { checked_at?: number };
+    const rejected = parsed.rejected_checked_at ?? parsed.checked_at;
+    const quarantine = parsed.quarantine_checked_at ?? parsed.checked_at;
+    if (
+      typeof rejected !== "number" ||
+      typeof quarantine !== "number" ||
+      typeof parsed.sizes_checked_at !== "number"
+    )
       return null;
-    return { checked_at: parsed.checked_at, sizes_checked_at: parsed.sizes_checked_at };
+    return {
+      rejected_checked_at: rejected,
+      quarantine_checked_at: quarantine,
+      sizes_checked_at: parsed.sizes_checked_at,
+    };
   } catch {
     return null;
   }
@@ -236,7 +252,8 @@ export async function runAlerts(
   }
 
   const state = await readState(env.EVENTS_BUCKET);
-  const after = state?.checked_at ?? now - LOOK_BACK_MS;
+  const rejectedAfter = state?.rejected_checked_at ?? now - LOOK_BACK_MS;
+  const quarantineAfter = state?.quarantine_checked_at ?? now - LOOK_BACK_MS;
   const sizesDue = state === null || now - state.sizes_checked_at >= SIZE_CHECK_EVERY_MS;
 
   const sqlSource = deps.sql === undefined ? sqlClient(env) : deps.sql;
@@ -245,10 +262,10 @@ export async function runAlerts(
       readHealth(env, now),
     ),
     readSource("rejected", ["rejected_new_file"], () =>
-      countRejectedBetween(env.EVENTS_BUCKET, after, now),
+      countRejectedBetween(env.EVENTS_BUCKET, rejectedAfter, now),
     ),
     readSource("quarantine", ["quarantine_new_row"], () =>
-      countQuarantineBetween(env.FACTS, after, now),
+      countQuarantineBetween(env.FACTS, quarantineAfter, now),
     ),
     readSource("postback_counts", ["postbacks_without_conversions"], () =>
       postbackCountsSince(env.FACTS, now - thresholds.postbacks_window_ms),
@@ -323,7 +340,7 @@ export async function runAlerts(
     writePoint(env.METRICS, d1SizePoint("events", sizes.value.events));
   }
 
-  // After the evaluation, so a failed delete never hides a firing.
+  // After the evaluation. A failed delete is logged and the state write and the `alert_run` line still happen.
   try {
     await deletePostbackCountsBefore(env.FACTS, now - POSTBACK_COUNTS_KEEP_MS);
   } catch (err) {
@@ -335,9 +352,11 @@ export async function runAlerts(
     );
   }
 
-  // Last, so a run that throws looks at the same window again. A failed size read stays due.
+  // Last, so a run that throws looks at the same window again. A source that failed keeps its old
+  // window start, so the next run reads the missed window; a failed size read stays due.
   const next: AlertState = {
-    checked_at: now,
+    rejected_checked_at: rejected.failure === null ? now : rejectedAfter,
+    quarantine_checked_at: quarantine.failure === null ? now : quarantineAfter,
     sizes_checked_at: sizes.value === null ? (state?.sizes_checked_at ?? 0) : now,
   };
   await env.EVENTS_BUCKET.put(ALERT_STATE_KEY, JSON.stringify(next));

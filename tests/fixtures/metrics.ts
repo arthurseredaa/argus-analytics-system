@@ -36,3 +36,6 @@ export const overloadedFacts = (): D1Database =>
   brokenFacts("D1 DB is overloaded. Requests queued for too long.");
 
 export const failingFacts = (): D1Database => brokenFacts("D1_ERROR: no such table");
+
+// An events database whose every call fails.
+export const failingEvents = (): D1Database => brokenFacts("D1_ERROR: events database down");

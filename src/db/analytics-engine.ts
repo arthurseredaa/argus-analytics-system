@@ -1,5 +1,5 @@
 // DB: the Analytics Engine SQL API client and the three alert queries over the metrics dataset.
-// Implements metrics-and-operations.md "Latency target" step 2 and "Alerts" (decision 16 of the stage 6 plan); serves NFR-6.
+// Implements the design in metrics-and-operations.md "Latency target" step 2 and "Alerts" (decision 16 of the stage 6 plan); serves NFR-6.
 // The token goes into one request header. It is never put into an error, so a log line cannot carry it.
 import { SELECTION_ENDPOINTS } from "../ops/metrics.ts";
 
@@ -19,9 +19,21 @@ export class AnalyticsSqlError extends Error {
   }
 }
 
+// A figure that is not a finite number. The alert run counts the source as unavailable, not as quiet.
+export class AnalyticsSqlShapeError extends Error {
+  constructor() {
+    super("Analytics Engine SQL API answered a value that is not a number");
+    this.name = "AnalyticsSqlShapeError";
+  }
+}
+
+// A hung API call must not stall the alert run, which waits for every source.
+export const SQL_TIMEOUT_MS = 10_000;
+
 export function analyticsSql(
   creds: { accountId: string; token: string },
   fetcher?: typeof fetch,
+  timeoutMs: number = SQL_TIMEOUT_MS,
 ): AnalyticsSql {
   // Looked up per call, so a stubbed global fetch is the one used.
   const send = fetcher ?? ((input, init) => fetch(input, init));
@@ -31,6 +43,7 @@ export function analyticsSql(
       method: "POST",
       headers: { authorization: `Bearer ${creds.token}` },
       body: sql,
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new AnalyticsSqlError(res.status);
     const body = (await res.json()) as { data?: Record<string, unknown>[] };
@@ -56,8 +69,13 @@ export type SqlSignals = {
   d1Overload: number;
 };
 
-// 64-bit integers can come back as strings, and a sum over no rows as null.
-const num = (value: unknown): number => Number(value ?? 0);
+// 64-bit integers can come back as strings, and a sum over no rows as null. Anything else that is not a
+// finite number would read as NaN, and NaN is never above a threshold, so it throws instead.
+function num(value: unknown): number {
+  const n = Number(value ?? 0);
+  if (!Number.isFinite(n)) throw new AnalyticsSqlShapeError();
+  return n;
+}
 
 export async function readSqlSignals(sql: AnalyticsSql): Promise<SqlSignals> {
   const [selection, worker, overload] = await Promise.all([

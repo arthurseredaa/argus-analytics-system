@@ -45,7 +45,6 @@ Set on 2026-11-03 in stage 4 of `docs/plans/part1-design-document.md`. The defin
 | NFR-6 | Synthetic probe, end to end | p95 at most 500 ms; every 5 minutes from one EU and one US location; alert after two consecutive failures | `GET /__probe`: the entry D1 batch for a UserID without rows, no events | Arthur's decision, 2026-11-03 |
 | NFR-6 | Allowed difference between k6 and the dashboard for the same window | 20% | | Arthur's decision, 2026-11-03 |
 | NFR-6 | Latency data points in Analytics Engine | about 18M a month, one per request; $0 today, $2.00 a month if billing starts | 18M − 10M included = 8M × $0.25 | platform limits, Analytics Engine |
-| PB-3 | Alert `postbacks_without_conversions` | at least 5 postback requests in 15 minutes from one partner and none accepted | the request count is kept per partner and minute in `postback_counts` | Part 2 stage 6, part2-mvp-stages.md |
 | NFR-6 | Probe traffic | about 580 Worker requests a day, no events | 2 locations × 288 runs | derived here |
 | NFR-3 | Freshness in production, normal operation | up to 30 s consumer wait, plus up to 5 minutes to the next loader run, plus the load job; alert above 15 minutes | | ADR 0005, ADR 0006 |
 | NFR-3 | Freshness in the MVP | about a minute | up to 30 s consumer wait plus a loader run every minute | ADR 0005 |
@@ -57,6 +56,7 @@ Set on 2026-11-03 in stage 4 of `docs/plans/part1-design-document.md`. The defin
 | NFR-6 | D1 overload alert (`d1_overload_errors`) | more than 10 in an hour | a starting value | ADR 0003 migration trigger three; Arthur's decision, 2026-11-03 |
 | NFR-6 | Worker error alert (`worker_5xx_rate`) | above 1% of requests over 5 minutes | | Arthur's decision, 2026-11-03 |
 | NFR-6 | Alert SQL queries against the Analytics Engine read limits | 864 queries a day, within the 10,000 a day of the Free plan | 3 queries × 12 runs an hour × 24 hours | Part 2 stage 6, decision 16 |
+| PB-3 | Alert `postbacks_without_conversions` | at least 5 postback requests in 15 minutes from one partner and none accepted | the request count is kept per partner and minute in `postback_counts` | Part 2 stage 6, part2-mvp-stages.md |
 | DES-6 | Observed EPU window and threshold | trailing 30 days by click date; observed EPU replaces the constant when the window has at least 500 users (a starting value) | | Arthur's decision, 2026-11-03 |
 | NFR-1 | R2 operations at the design load | about 215,000 Class A and 180,000 Class B a month, within the free 1M and 10M: $0 | 18M / 100 events per file = 180,000 writes; 8,640 loader runs × about 4 lists and writes = about 35,000; each file read once | platform limits, R2 |
 | NFR-1 | R2 storage at the design load | about 18 GB-month, $0.12 a month | `loaded/` kept 30 days × 0.6 GB a day at 1 KB per event; (18 − 10 free) × $0.015 | platform limits, R2; ADR 0006 |

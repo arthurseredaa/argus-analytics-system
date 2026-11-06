@@ -1,5 +1,5 @@
 // DB: postback requests per partner and minute, for the postbacks_without_conversions alert.
-// Implements metrics-and-operations.md "Alerts"; serves PB-3, PB-4, Q-11.
+// Implements the design in metrics-and-operations.md "Alerts"; serves PB-3, PB-4, Q-11.
 
 const MINUTE_MS = 60_000;
 

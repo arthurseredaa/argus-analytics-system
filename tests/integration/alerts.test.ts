@@ -4,12 +4,14 @@ import { storedEvent } from "../fixtures/events.ts";
 import worker from "../../src/index.ts";
 import {
   AnalyticsSqlError,
+  analyticsSql,
   D1_OVERLOAD_SQL,
   SELECTION_P95_SQL,
   WORKER_5XX_SQL,
   type AnalyticsSql,
 } from "../../src/db/analytics-engine.ts";
 import { ALERT_CRON, runAlerts } from "../../src/ops/alerts.ts";
+import { ALERT_STATE_KEY } from "../../src/events/files.ts";
 import {
   alertLines,
   logLines,
@@ -19,7 +21,7 @@ import {
   testThresholds,
 } from "../fixtures/alerts.ts";
 import { clearBucket, loadNow, putPending } from "../fixtures/files.ts";
-import { recordingDataset } from "../fixtures/metrics.ts";
+import { failingFacts, recordingDataset } from "../fixtures/metrics.ts";
 import { leadBody, postback } from "../fixtures/postback.ts";
 
 const HOUR = 3_600_000;
@@ -54,6 +56,16 @@ const highSql: AnalyticsSql = async (query) => {
   if (query === D1_OVERLOAD_SQL) return [{ errors: "12" }];
   return [];
 };
+
+// One answer is not a number.
+const malformedSql: AnalyticsSql = async (query) =>
+  query === D1_OVERLOAD_SQL ? [{ errors: "many" }] : [];
+
+const readState = async () =>
+  JSON.parse(await (await env.EVENTS_BUCKET.get(ALERT_STATE_KEY))!.text()) as Record<
+    string,
+    number
+  >;
 
 const pointsOf = (rec: ReturnType<typeof recordingDataset>, kind: string) =>
   rec.points.filter((p) => p.indexes?.[0] === kind);
@@ -138,6 +150,79 @@ describe("alert run", () => {
     expect(log.mock.calls.some((args) => String(args[0]).includes("user1@example.com"))).toBe(
       false,
     );
+  });
+
+  it("NFR-5 a failed rejected listing keeps its window, so the next run still sees the file", async () => {
+    const log = vi.spyOn(console, "log");
+    const start = Date.now();
+    await putAlertState({
+      rejected_checked_at: start - 1000,
+      quarantine_checked_at: start - 1000,
+      sizes_checked_at: start,
+    });
+    await env.EVENTS_BUCKET.put(`rejected/t-${crypto.randomUUID()}.ndjson`, "{}\n");
+
+    // Only the listing fails; the state write at the end of the run uses the real bucket.
+    const failingList = new Proxy(env.EVENTS_BUCKET, {
+      get: (target, prop) => {
+        if (prop === "list")
+          return async () => {
+            throw new Error("r2 list down");
+          };
+        const value = Reflect.get(target, prop, target) as unknown;
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await runAlerts(alertEnv(recordingDataset(), { EVENTS_BUCKET: failingList }), start + 1000);
+    expect(logLines(log, "alert_source_unavailable").map((l) => l["source"])).toContain("rejected");
+    const state = await readState();
+    expect(state["rejected_checked_at"]).toBe(start - 1000);
+    expect(state["quarantine_checked_at"]).toBe(start + 1000);
+
+    log.mockClear();
+    await runAlerts(alertEnv(recordingDataset()), start + 2000);
+    expect(alertLines(log).filter((l) => l["id"] === "rejected_new_file")).toHaveLength(1);
+    expect((await readState())["rejected_checked_at"]).toBe(start + 2000);
+  });
+
+  it("PB-4 Q-11 a failed quarantine read keeps its window, so the next run still sees the row", async () => {
+    const log = vi.spyOn(console, "log");
+    const start = Date.now();
+    await putAlertState({
+      rejected_checked_at: start - 1000,
+      quarantine_checked_at: start - 1000,
+      sizes_checked_at: start,
+    });
+    const res = await postback("partnerA", leadBody(`unknown-${crypto.randomUUID()}`));
+    expect(await res.json()).toEqual({ status: "quarantined" });
+
+    const failedAt = Date.now() + 1000;
+    await runAlerts(alertEnv(recordingDataset(), { FACTS: failingFacts() }), failedAt);
+    expect(logLines(log, "alert_source_unavailable").map((l) => l["source"])).toContain(
+      "quarantine",
+    );
+    expect((await readState())["quarantine_checked_at"]).toBe(start - 1000);
+
+    log.mockClear();
+    await runAlerts(alertEnv(recordingDataset()), failedAt + 1000);
+    expect(
+      alertLines(log).filter((l) => l["id"] === "quarantine_new_row").length,
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("NFR-5 a state with the single checked_at is read as both windows", async () => {
+    const log = vi.spyOn(console, "log");
+    const start = Date.now();
+    await putAlertState({ checked_at: start - 1000, sizes_checked_at: start });
+    await env.EVENTS_BUCKET.put(`rejected/t-${crypto.randomUUID()}.ndjson`, "{}\n");
+
+    await runAlerts(alertEnv(recordingDataset()), start + 1000);
+
+    expect(alertLines(log).filter((l) => l["id"] === "rejected_new_file")).toHaveLength(1);
+    const state = await readState();
+    expect(state["rejected_checked_at"]).toBe(start + 1000);
+    expect(state["quarantine_checked_at"]).toBe(start + 1000);
+    expect(state).not.toHaveProperty("checked_at");
   });
 
   it("NFR-5 dlq_not_empty fires on messages in the dead letter queue", async () => {
@@ -279,6 +364,35 @@ describe("alert run", () => {
     expect(lines[0]).not.toHaveProperty("reason");
   });
 
+  it("NFR-6 a hung SQL API times out, logs TimeoutError and the run still writes its state", async () => {
+    const log = vi.spyOn(console, "log");
+    // A fetch that answers only by rejecting when the request is aborted.
+    const hung = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+      })) as typeof fetch;
+    const sql = analyticsSql({ accountId: "acc-test", token: "tok-test" }, hung, 50);
+
+    await runAlerts(alertEnv(recordingDataset()), Date.now(), { sql });
+
+    const line = logLines(log, "alert_source_unavailable").find(
+      (l) => l["source"] === "analytics_engine_sql",
+    );
+    expect(line?.["name"]).toBe("TimeoutError");
+    expect(logLines(log, "alert_run")).toHaveLength(1);
+    expect(await readState()).toHaveProperty("rejected_checked_at");
+  });
+
+  it("NFR-6 a malformed number in the SQL answer counts the source as unavailable", async () => {
+    const log = vi.spyOn(console, "log");
+    await runAlerts(alertEnv(recordingDataset()), Date.now(), { sql: malformedSql });
+
+    const line = logLines(log, "alert_source_unavailable").find(
+      (l) => l["source"] === "analytics_engine_sql",
+    );
+    expect(line?.["name"]).toBe("AnalyticsSqlShapeError");
+  });
+
   it("NFR-6 SQL readings above the thresholds fire their alerts", async () => {
     const log = vi.spyOn(console, "log");
     await runAlerts(alertEnv(recordingDataset()), Date.now(), { sql: highSql });
@@ -320,5 +434,6 @@ describe("alert run", () => {
     );
     expect(failed?.["status"]).toBe(401);
     expect(log.mock.calls.some((args) => String(args[0]).includes("tok-secret-test"))).toBe(false);
+    expect(log.mock.calls.some((args) => String(args[0]).includes("acc-test"))).toBe(false);
   });
 });

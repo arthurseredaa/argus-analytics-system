@@ -1,5 +1,5 @@
 // DB: the two reads of the alert run, new quarantine rows and the size of a D1 database.
-// Implements metrics-and-operations.md "Alerts"; serves PB-4, Q-11, MVP-5.
+// Implements the design in metrics-and-operations.md "Alerts"; serves PB-4, Q-11, MVP-5.
 
 // Rows received after `after` and at or before `upTo`, so a row is counted by exactly one run.
 export async function countQuarantineBetween(

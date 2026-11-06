@@ -1,12 +1,14 @@
 import { createScheduledController, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LOADER_CRON } from "../../src/events/loader.ts";
+import { LOADER_CRON, type LoaderRun } from "../../src/events/loader.ts";
 import worker from "../../src/index.ts";
+import { recordLoaderRun } from "../../src/ops/metrics.ts";
 import { browserEvent } from "../fixtures/event-bodies.ts";
 import { call, postEvent, storedEvent } from "../fixtures/events.ts";
 import { clearBucket, pauseLoader, putPending, resumeLoader } from "../fixtures/files.ts";
 import { newCookie } from "../fixtures/http.ts";
 import {
+  failingEvents,
   failingFacts,
   overloadedFacts,
   recordingDataset,
@@ -112,6 +114,7 @@ describe("request data points", () => {
     expect(text).not.toContain("user1@example.com");
     expect(text).not.toContain("user1%40example.com");
     expect(text).not.toContain("demo");
+    expect(text).not.toContain(cookie.slice(4));
   });
 });
 
@@ -130,5 +133,30 @@ describe("loader data points", () => {
     await runLoaderCron(paused);
     expect(paused.points).toHaveLength(1);
     expect(paused.points[0]?.blobs?.[1]).toBe("paused");
+  });
+
+  it("NFR-3 a loader point is still written when the freshness read fails", async () => {
+    const log = vi.spyOn(console, "log");
+    const rec = recordingDataset();
+    const run: LoaderRun = {
+      status: "d1_unreachable",
+      batchIds: [],
+      files: 0,
+      rows: 0,
+      duplicates: 0,
+      invalid: 0,
+      rejected: 0,
+    };
+
+    await expect(
+      recordLoaderRun({ METRICS: rec.dataset, EVENTS: failingEvents() }, run, Date.now()),
+    ).resolves.toBeUndefined();
+
+    expect(rec.points).toHaveLength(1);
+    expect(rec.points[0]?.indexes?.[0]).toBe("loader");
+    expect(rec.points[0]?.blobs?.[1]).toBe("d1_unreachable");
+    expect(rec.points[0]?.doubles?.[0]).toBe(-1);
+    expect(logLines(log).some((l) => l.includes('"msg":"metrics_read_failed"'))).toBe(true);
+    expect(logLines(log).some((l) => l.includes("events database down"))).toBe(false);
   });
 });
