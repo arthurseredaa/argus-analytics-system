@@ -163,7 +163,7 @@ What a reviewer sees during each outage:
 | BigQuery or the loader | keep working (NFR-4) | freshness grows; no new rows | `freshness_lag` after 15 minutes, `pending_oldest_file` after 1 hour | the loader takes the backlog, 9,000 files a run; counts equal the distinct EventIDs sent |
 | Consumer or R2 | keep working | freshness grows | `freshness_lag`; `dlq_not_empty` after about 5 hours | retries recover a short outage with no one involved; after 5 hours an operator runs the redrive script within 14 days |
 | Queue | keep working; events go to R2 one file each | freshness stays close to normal | none of the delivery alerts while the loader keeps up | the loader drains the one-event files; counts equal the distinct EventIDs |
-| Queue and R2 together | `/api/events` and `/api/complete` answer `503`; the browser keeps unsent events and retries completion | no new data | `worker_5xx_rate`, `probe_failed` | events come in as browsers resend them; events are lost only if a browser gives up first ([ADR 0005](../adr/0005-event-ingestion-and-buffering.md)) |
+| Queue and R2 together | `/api/events` and postbacks answer `503`; entry and completion answer normally and lose their server events | no new data | `worker_5xx_rate`, `probe_failed` | browser events come in as browsers resend them and Leads as partners retry; the server events of entry and completion sent in that window are lost ([ADR 0005](../adr/0005-event-ingestion-and-buffering.md)) |
 | D1 facts database | entry, completion, `/go` and postbacks fail | funnel steps still arrive; Leads and Purchases stop | `worker_5xx_rate`, `probe_failed`, possibly `d1_overload_errors` | partners retry postbacks; the unique key stops double counting (PB-5) |
 
 ### Alerts

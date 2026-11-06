@@ -1,7 +1,7 @@
 {
   "$schema": "./progress.schema.json",
   "plan": "docs/plans/part2-mvp-stages.md",
-  "updated": "2026-11-05",
+  "updated": "2026-11-06",
   "stages": [
     {
       "id": 0,
@@ -46,12 +46,15 @@
     {
       "id": 5,
       "title": "R2 files and the loader",
-      "status": "next"
+      "status": "done",
+      "closed": "2026-11-06",
+      "verified": "pnpm check (430 passed, 41 files); pnpm test -t \"NFR-3|NFR-4|NFR-5|NFR-8|R-12\" (72 passed); pnpm test -t \"TEST-3|ID-1|ID-4|BIZ-2|AN-|DEMO-\" (101 passed); pnpm test:e2e against local wrangler dev ends with demo passed against http://localhost:8787; pnpm test:browser passed, email scan clean; the paused demo run passed with the funnel cells at 0 and its ok lines matching the normal run; the redirect grep prints nothing; wrangler r2 bucket lifecycle list funnels-events shows loaded-30d on loaded/ and rejected-30d on rejected/, 30 days each. The deployed checks and the loader-paused drill run right after this commit deploys.",
+      "notes": "Built through subagent-driven development from docs/plans/part2-stage-5-loader.md: five tasks written by Sonnet, a review per task (Opus for the loader task), a whole-branch review on Opus and one fix wave. Decisions in the plan: the consumer writes one NDJSON file per batch to R2 pending/ and acks, retries a failed write after 1, 2, 4, 8, 16, 32 minutes then hourly, and sends the batch to events-dlq after 10 retries; the producer writes a one-event pending/ file when the Queue refuses and answers 503 only when the Queue and R2 both fail; completion and /go keep sending in waitUntil and never answer 503 (stage 2 plan, NFR-4), with data-model.md and metrics-and-operations.md corrected; the loader runs every minute, at most 8 batches of 900 rows (7,200 rows, under D1's 1,000 queries per invocation), writes a manifest before the insert, dedups EventIDs, sends invalid rows to rejected/, inserts with ON CONFLICT DO NOTHING, writes loaded/ and deletes pending/; a failed insert counts as an attempt only when SELECT 1 answers, five attempts send a batch to rejected/; control/loader-paused pauses the loader (pnpm sink outage on|off [--remote]); GET /__test/health behind TEST_ROUTES; reset leaves R2 alone; the local dev server runs a loader ticker; the demo waits up to 150 s and has a paused mode; R2 lifecycle rules loaded-30d and rejected-30d applied to funnels-events. Defects the reviews found and fixed: R2 state leaked between tests of one file (now clearBucket in beforeEach); no test loaded a producer fallback file into D1; a thrown R2 error ended a loader run without a loader_run line; the NFR-4 and NFR-5 manual steps paused the local loader instead of the deployed one; 51 acceptance commands used pnpm test -- -t, which runs the whole suite; design.md said 503 when D1 or the Queue fails. Deferred: a D1 that answers SELECT 1 but refuses writes sends batches to rejected/ after 5 runs (recoverable for 30 days); overlapping loader runs can reset an attempt count or write already loaded rows to rejected/, which stage 6 notes next to the rejected_new_file alert; an unparsable manifest is skipped silently; open_batches in health is capped at 10,000 without a flag; the paused demo reads the funnel cells once. The deployed checks and the loader-paused drill run right after the merge deploys; their numbers and the ADR 0005 and 0006 Outcome go in a follow-up PR. Explain-back questions for Arthur, not blocking: where does one event wait while the loader is paused, and where while R2 is down? Why does a D1 error count as a load attempt only when SELECT 1 still answers? Why does a run take at most 7,200 rows, when ADR 0006 says 9,000 files?"
     },
     {
       "id": 6,
       "title": "Operations",
-      "status": "pending"
+      "status": "next"
     },
     {
       "id": 7,

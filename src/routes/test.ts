@@ -1,9 +1,10 @@
-// Route: GET /__test/state, POST /__test/reset and POST /__test/seed, answered only while TEST_ROUTES is "on".
+// Route: GET /__test/state, GET /__test/health, POST /__test/reset and POST /__test/seed, answered only while TEST_ROUTES is "on".
 // Implements ADR 0003 (facts in D1); serves ID-1, ID-4, PB-3, OFF-3, OFF-4, R-12, DEMO-2.
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app.ts";
 import { readFacts } from "../db/facts.ts";
+import { readHealth } from "../events/health.ts";
 import { readTestEvents, readTestState, resetTestData, seedTestUser } from "../db/test-state.ts";
 import {
   ConfigError,
@@ -65,6 +66,12 @@ export function testRoute(): Hono<AppEnv> {
       counts: { ...state.counts, events: events.total },
       partner_secrets_ok: await partnerSecretsOk(c.env.MASTER_KEY, state.partnerSecrets),
     });
+  });
+
+  // The state of the event pipeline: pending files, last load, freshness, pause flag.
+  route.get("/health", async (c) => {
+    c.header("cache-control", "no-store");
+    return c.json(await readHealth(c.env, Date.now()));
   });
 
   route.post("/reset", async (c) => {

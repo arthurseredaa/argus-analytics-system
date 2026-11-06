@@ -82,6 +82,7 @@ describe("test routes", () => {
     const off = { TEST_ROUTES: "off" };
     expect((await getPath("/__test/state", undefined, app, off)).status).toBe(404);
     expect((await getPath("/__test/reset", undefined, app, off, "POST")).status).toBe(404);
+    expect((await getPath("/__test/health", undefined, app, off)).status).toBe(404);
   });
 
   it.each([
@@ -93,6 +94,7 @@ describe("test routes", () => {
     const app = createApp(prelanderFlows);
     expect((await getPath("/__test/state", undefined, app, override)).status).toBe(404);
     expect((await getPath("/__test/reset", undefined, app, override, "POST")).status).toBe(404);
+    expect((await getPath("/__test/health", undefined, app, override)).status).toBe(404);
   });
 
   it("PB-3 test state confirms partner secrets decrypt under the worker key", async () => {

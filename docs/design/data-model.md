@@ -63,7 +63,7 @@ Content-Type: application/json
 5. sends `quiz_completed` and `offer_selected` to the Queue;
 6. answers `{"offer_id": "003", "name": "Asia Connect", "url": "https://asia-connect.example", "reason": "best_epu", "catalog_version": 1}`.
 
-If the events can be neither queued nor written to R2, the endpoint answers `503` and the browser retries the whole request. The D1 writes repeat with the same values, so a retry changes nothing in the facts.
+The send does not delay the answer. If the Queue refuses an event, `sendEvent()` writes it to R2 `pending/`; if R2 refuses it too, the endpoint still answers `200` and that event is lost. The page never waits for analytics (NFR-4). Only `POST /api/events` and postbacks answer `503` when both refuse, because the browser and the partner can resend.
 
 The step events of the same visit still go to `POST /api/events`, one event per request (Arthur's decision of 2026-11-02, ADR 0005). They feed analytics and are never written to D1.
 
@@ -268,6 +268,25 @@ It has one index besides the primary key, `events_received_at ON events (receive
 
 The size estimate in `nfr.md` assumed a D1 row for every user; since only users who complete the quiz now get rows, stage 4 revisits it.
 
+## R2 layout
+
+All event files live in the one bucket `funnels-events`. The keys are defined in `src/events/files.ts`. `<ms>` is the write time in Unix milliseconds padded to 13 digits, so key order is write order and the loader takes the oldest files first.
+
+| Key | Written by | Content |
+|---|---|---|
+| `pending/<ms>-b-<uuid>.ndjson` | the Queue consumer | one batch of up to 100 events, one JSON object per line |
+| `pending/<ms>-e-<event_id>.ndjson` | `sendEvent()`, when the Queue refuses | one event, one line |
+| `batches/<batch_id>.json` | the loader | the manifest `{ batch_id, files, attempt, created_at }`; `batch_id` is the first 32 hex characters of SHA-256 over the sorted file keys joined by a newline |
+| `loaded/<batch_id>.ndjson` | the loader | the rows inserted into D1 |
+| `rejected/<batch_id>.ndjson` | the loader | the rows of a batch that failed five loads |
+| `rejected/<batch_id>-invalid.ndjson` | the loader | raw lines that failed validation |
+| `control/loader-paused` | an operator | the pause flag; the loader skips a run while it exists |
+| `control/last-load.json` | the loader | `{ at, files, rows }` of the last run that loaded a batch |
+
+Lifecycle: `loaded/` and `rejected/` expire after 30 days, through the bucket rules `loaded-30d` and `rejected-30d`. R2 lifecycle rules have no field in `wrangler.jsonc`, so they are applied once to the account with `wrangler r2 bucket lifecycle add`. Nothing deletes `pending/` or `batches/` automatically (ADR 0006).
+
+Limits of one loader run in the MVP: at most 9,000 files, batches of at most 900 rows (100 insert statements of 9 rows), and at most 8 batches. That is at most 7,200 rows and 800 D1 queries, inside the 1,000 queries one Worker invocation may make. A file with more than 900 rows forms a batch of its own, and files are read 6 at a time.
+
 ## Current answers
 
 In D1, the current answer to a question is the one row in `user_answers` for that user and question. It is written only from `POST /api/complete`, and a later completion replaces it only if its `received_at` is greater.
@@ -353,7 +372,7 @@ Every event has the same envelope (ADR 0005). One event per request (Arthur's de
 
 `conversions.payout` stores the payout as a number (REAL), while the event carries the partner's string.
 
-Step 3 has no browser answer event; finishing it is `quiz_completed`. A duplicate postback sends its `lead` or `purchase` again with the same EventID, derived from `(partner_id, type, transaction_id)`. If the Queue refused the first send, the endpoint answered `503`, and the partner's retry is how the event reaches analytics; the events table keeps one row per EventID (ADR 0007). A quarantined postback sends nothing. `offer_selected` is emitted only when selection returns an offer or `no_offer`; an entry that shows the quiz emits `prelander_viewed` alone. `offer_click.reason` is the click's reason, added so BigQuery can tell a Lead return transition from a first one without reading D1.
+Step 3 has no browser answer event; finishing it is `quiz_completed`. A duplicate postback sends its `lead` or `purchase` again with the same EventID, derived from `(partner_id, type, transaction_id)`. If the Queue and R2 both refused the first send, the endpoint answered `503`, and the partner's retry is how the event reaches analytics; the events table keeps one row per EventID (ADR 0007). A quarantined postback sends nothing. `offer_selected` is emitted only when selection returns an offer or `no_offer`; an entry that shows the quiz emits `prelander_viewed` alone. `offer_click.reason` is the click's reason, added so BigQuery can tell a Lead return transition from a first one without reading D1.
 
 ### The nine events of a visit
 

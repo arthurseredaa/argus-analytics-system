@@ -9,6 +9,7 @@ import {
   failingQueue,
   postEvent,
 } from "../fixtures/events.ts";
+import { filesWith, linesOf } from "../fixtures/files.ts";
 import { newCookie, UUID_V4 } from "../fixtures/http.ts";
 
 const idOf = (cookie: string) => cookie.slice(4);
@@ -195,6 +196,11 @@ describe("server events at entry and completion", () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { offer_id: string }).offer_id).toBe("003");
     expect(log.mock.calls.flat().join("\n")).toContain('"msg":"queue_send_failed"');
+    const types = new Set<string>();
+    for (const key of await filesWith("pending/", idOf(cookie))) {
+      for (const line of await linesOf(key)) types.add((JSON.parse(line) as { type: string }).type);
+    }
+    expect(types).toEqual(new Set(["prelander_viewed", "quiz_completed", "offer_selected"]));
   });
 
   it("NFR-8 R-3 the completion received last decides the stored answers", async () => {

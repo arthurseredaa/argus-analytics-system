@@ -54,12 +54,12 @@ export function prelanderRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
             visitId,
             extraEvents: [shown, selected],
           });
-        emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [shown, selected]);
+        emitInBackground(c.executionCtx, c.env, [shown, selected]);
         return c.body(renderNoOfferPage(), 200, HTML);
       }
     }
 
-    emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [viewed("quiz")]);
+    emitInBackground(c.executionCtx, c.env, [viewed("quiz")]);
     return c.body(renderQuizPage(flow, id, visitId), 200, HTML);
   });
 

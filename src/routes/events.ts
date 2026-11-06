@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import type { AppEnv } from "../app.ts";
 import type { Flow } from "../domain/flow.ts";
 import { checkIncoming } from "../events/envelope.ts";
-import { sendEvent } from "../events/producer.ts";
+import { EventsUnavailable, sendEvent } from "../events/producer.ts";
 
 const MAX_BODY_BYTES = 4096;
 
@@ -36,14 +36,14 @@ export function eventsRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
     }
 
     try {
-      await sendEvent(c.env.EVENTS_QUEUE, {
+      await sendEvent(c.env, {
         ...checked.event,
         user_id: c.get("userId"),
         received_at: Date.now(),
       });
-    } catch {
-      // Stage 5 writes the event to R2 `pending/` before giving up here.
-      log({ msg: "queue_send_failed", source: "api_events" });
+    } catch (err) {
+      // The Queue and R2 both refused; sendEvent has logged why.
+      if (!(err instanceof EventsUnavailable)) throw err;
       return c.json({ error: "unavailable" }, 503, { "Retry-After": "30" });
     }
     return c.json({ ok: true }, 202);

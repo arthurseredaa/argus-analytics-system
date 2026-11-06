@@ -4,12 +4,7 @@ import { consumeEvents } from "../../src/events/consumer.ts";
 import { makeServerEvent, SERVER_TYPES } from "../../src/events/envelope.ts";
 import { deepPayload } from "../fixtures/event-bodies.ts";
 import { deliver, eventsOf, storedEvent } from "../fixtures/events.ts";
-
-// `prepare` is stubbed too: without it the mock failed with a TypeError before `batch` was reached.
-const failingDb = {
-  prepare: () => ({ bind: () => ({}) }),
-  batch: () => Promise.reject(new Error("D1 is down")),
-} as unknown as D1Database;
+import { failingBucket, filesWith, linesOf, loadNow } from "../fixtures/files.ts";
 
 describe("queue consumer", () => {
   it("TEST-3 R-3 resending the same event stores it once", async () => {
@@ -98,28 +93,49 @@ describe("queue consumer", () => {
     expect(answers.results).toHaveLength(0);
   });
 
-  it("NFR-8 a D1 failure retries the whole batch after 60 seconds", async () => {
+  it("NFR-5 the consumer writes one NDJSON file per batch to pending/ and acknowledges", async () => {
+    const userId = crypto.randomUUID();
+    const events = [1, 2, 3].map((seq) => storedEvent({ user_id: userId, seq }));
+    const result = await deliver(events, { load: false });
+    expect(result.explicitAcks).toEqual(["m0", "m1", "m2"]);
+    const files = await filesWith("pending/", events[0]!.event_id);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatch(/^pending\/\d{13}-b-[0-9a-f-]{36}\.ndjson$/);
+    expect((await linesOf(files[0]!)).map((line) => JSON.parse(line))).toEqual(events);
+    expect(await eventsOf(userId)).toHaveLength(0);
+    await loadNow();
+    expect(await eventsOf(userId)).toHaveLength(3);
+  });
+
+  it("NFR-5 consumer write failure retries each message with the growing delay", async () => {
     const batch = createMessageBatch(
       "events",
-      [storedEvent(), storedEvent()].map((body, i) => ({
+      Array.from({ length: 10 }, (_, i) => ({
         id: `m${i}`,
         timestamp: Date.now(),
-        attempts: 1,
-        body,
+        attempts: i + 1,
+        body: storedEvent(),
       })),
     );
-    // The plugin's retryAll() drops its argument, so the call itself is what the test checks.
-    const retryAll = vi.spyOn(batch, "retryAll");
-    await consumeEvents(batch, failingDb);
-    expect(retryAll).toHaveBeenCalledExactlyOnceWith({ delaySeconds: 60 });
+    // The plugin may drop the delay, as it does for retryAll(), so the call itself is what the test checks.
+    const retries = batch.messages.map((message) => vi.spyOn(message, "retry"));
+    await consumeEvents(batch, failingBucket(), Date.now());
+    expect(retries.map((retry) => retry.mock.calls.flat())).toEqual(
+      [60, 120, 240, 480, 960, 1920, 3600, 3600, 3600, 3600].map((delaySeconds) => [
+        { delaySeconds },
+      ]),
+    );
     const result = await getQueueResult(batch, createExecutionContext());
-    expect(result.retryBatch.retry).toBe(true);
+    expect(result.retryMessages.map((m) => m.msgId)).toEqual(batch.messages.map((m) => m.id));
     expect(result.explicitAcks).toEqual([]);
   });
 
-  it("NFR-8 a D1 failure logs the error class name and never its message", async () => {
+  it("NFR-8 an R2 failure logs the error class name and never its message", async () => {
     const log = vi.spyOn(console, "log");
-    await deliver([storedEvent()], failingDb);
+    const batch = createMessageBatch("events", [
+      { id: "m0", timestamp: Date.now(), attempts: 1, body: storedEvent() },
+    ]);
+    await consumeEvents(batch, failingBucket(), Date.now());
     const lines = log.mock.calls.map((args) => String(args[0]));
     const line = lines.find((l) => l.includes('"msg":"consumer_write_failed"'));
     expect(JSON.parse(line ?? "{}")).toEqual({
@@ -127,42 +143,46 @@ describe("queue consumer", () => {
       count: 1,
       name: "Error",
     });
-    expect(lines.join("\n")).not.toContain("D1 is down");
+    expect(lines.join("\n")).not.toContain("r2 down");
     log.mockRestore();
   });
 
-  it("NFR-8 a malformed message is retried alone and the rest are stored", async () => {
+  it("NFR-8 a malformed message is written and acknowledged, and the loader rejects it alone", async () => {
     const userId = crypto.randomUUID();
+    const bad = { foo: crypto.randomUUID() };
     const result = await deliver([
       storedEvent({ user_id: userId, seq: 1 }),
-      { foo: 1 },
+      bad,
       storedEvent({ user_id: userId, seq: 2 }),
     ]);
+    expect(result.explicitAcks).toEqual(["m0", "m1", "m2"]);
+    expect(result.retryMessages).toEqual([]);
     expect(await eventsOf(userId)).toHaveLength(2);
-    // The plugin reports explicit retries as `retryMessages` ({ msgId }), not `explicitRetries`.
-    expect(result.retryMessages.map((m) => m.msgId)).toEqual(["m1"]);
-    expect(result.explicitAcks).toEqual(expect.arrayContaining(["m0", "m2"]));
-    expect(result.explicitAcks).not.toContain("m1");
+    const rejected = await filesWith("rejected/", bad.foo);
+    expect(rejected).toHaveLength(1);
+    expect(await linesOf(rejected[0]!)).toEqual([JSON.stringify(bad)]);
   });
 
-  it("NFR-8 a deeply nested message is retried alone and the rest of the batch is stored", async () => {
+  it("NFR-8 a deeply nested message is written and acknowledged, and the loader rejects it alone", async () => {
     const userId = crypto.randomUUID();
-    const deep = deepPayload(1001);
+    const deep = storedEvent({
+      user_id: userId,
+      seq: 2,
+      type: "page_error",
+      schema_version: 2,
+      payload: deepPayload(1001),
+    });
     const result = await deliver([
       storedEvent({ user_id: userId, seq: 1 }),
-      storedEvent({
-        user_id: userId,
-        seq: 2,
-        type: "page_error",
-        schema_version: 2,
-        payload: deep,
-      }),
+      deep,
       storedEvent({ user_id: userId, seq: 3 }),
     ]);
+    expect(result.explicitAcks).toEqual(["m0", "m1", "m2"]);
+    expect(result.retryMessages).toEqual([]);
     expect(await eventsOf(userId)).toHaveLength(2);
-    expect(result.retryMessages.map((m) => m.msgId)).toEqual(["m1"]);
-    expect(result.explicitAcks).toEqual(expect.arrayContaining(["m0", "m2"]));
-    expect(result.explicitAcks).not.toContain("m1");
+    const rejected = await filesWith("rejected/", deep.event_id);
+    expect(rejected).toHaveLength(1);
+    expect(await linesOf(rejected[0]!)).toEqual([JSON.stringify(deep)]);
   });
 
   it("NFR-5 the Worker's queue handler stores the batch", async () => {

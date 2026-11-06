@@ -107,7 +107,7 @@ export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
       prelanderId: body.prelander_id,
       now: Date.now(),
     };
-    emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [
+    emitInBackground(c.executionCtx, c.env, [
       makeServerEvent({ ...base, type: "quiz_completed", payload: { answers: checked.answers } }),
       makeServerEvent({
         ...base,

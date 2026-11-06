@@ -6,6 +6,7 @@ import { derivedEventId } from "../../src/events/envelope.ts";
 import { changeCatalog } from "../fixtures/catalog.ts";
 import { call, captureQueue, deliver, eventsOf, failingQueue } from "../fixtures/events.ts";
 import { TEST_PARTNER_SECRETS } from "../fixtures/facts.ts";
+import { failingBucket } from "../fixtures/files.ts";
 import { newCookie } from "../fixtures/http.ts";
 import {
   conversionsOf,
@@ -450,7 +451,12 @@ describe("POST /postback/v1/:partner", () => {
   it("PB-5 the postback event retried after a queue failure reaches analytics once", async () => {
     const user = await userWithClick();
     const raw = JSON.stringify(leadBody(user.clickId));
-    const failed = await postback("partnerA", null, { raw }, { EVENTS_QUEUE: failingQueue() });
+    const failed = await postback(
+      "partnerA",
+      null,
+      { raw },
+      { EVENTS_QUEUE: failingQueue(), EVENTS_BUCKET: failingBucket() },
+    );
     expect(failed.status).toBe(503);
     expect(failed.headers.get("retry-after")).toBe("30");
     expect(await conversionsOf(user.clickId)).toHaveLength(1);

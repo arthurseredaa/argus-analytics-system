@@ -40,7 +40,7 @@ export async function startTransition(
     reason: input.reason,
     createdAt: now,
   });
-  emitInBackground(c.executionCtx, c.env.EVENTS_QUEUE, [
+  emitInBackground(c.executionCtx, c.env, [
     ...(input.extraEvents ?? []),
     makeServerEvent({
       type: "offer_click",

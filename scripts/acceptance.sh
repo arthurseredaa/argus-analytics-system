@@ -28,11 +28,27 @@ viewstep() { # viewstep <jar> <step> [seq]: one step_viewed event, analytics onl
 report() { # report [query]: the report as sorted JSON without the two fields that change on every call
   curl -s "$BASE/api/report${1:+?$1}" | jq -S 'del(.as_of, .events_newest_at)'
 }
-wait_report() { # wait_report <jq filter> <expected> [seconds]: polls every 3 seconds, default 90; prints the last value and returns 1 on timeout
+health() { # health: the pipeline health from /__test/health as sorted JSON
+  curl -s "$BASE/__test/health" | jq -S .
+}
+wait_report() { # wait_report <jq filter> <expected> [seconds]: polls every 3 seconds, default 150; prints the last value and returns 1 on timeout
   local deadline got
-  deadline=$(( $(date +%s) + ${3:-90} ))
+  deadline=$(( $(date +%s) + ${3:-150} ))
   while :; do
     got=$(curl -s "$BASE/api/report" | jq -r "$1" 2>/dev/null || true)
+    [ "$got" = "$2" ] && return 0
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "$got"
+      return 1
+    fi
+    sleep 3
+  done
+}
+wait_health() { # wait_health <jq filter> <expected> [seconds]: like wait_report, on /__test/health
+  local deadline got
+  deadline=$(( $(date +%s) + ${3:-150} ))
+  while :; do
+    got=$(curl -s "$BASE/__test/health" | jq -r "$1" 2>/dev/null || true)
     [ "$got" = "$2" ] && return 0
     if [ "$(date +%s)" -ge "$deadline" ]; then
       echo "$got"

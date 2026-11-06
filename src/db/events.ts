@@ -53,3 +53,21 @@ export async function insertEvents(db: D1Database, events: readonly StoredEvent[
   if (statements.length === 0) return;
   await db.batch(statements.map((s) => db.prepare(s.sql).bind(...s.params)));
 }
+
+// `SELECT 1`: tells an unreachable events database apart from an insert that failed on its data.
+export async function pingEvents(db: D1Database): Promise<boolean> {
+  try {
+    await db.prepare("SELECT 1").first();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// The newest `received_at` in the events table, or null while it is empty; the health route's freshness.
+export async function newestEventAt(db: D1Database): Promise<number | null> {
+  const row = await db
+    .prepare("SELECT MAX(received_at) AS newest_at FROM events")
+    .first<{ newest_at: number | null }>();
+  return row?.newest_at ?? null;
+}
