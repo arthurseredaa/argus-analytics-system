@@ -25,6 +25,14 @@ describe("postback signature", () => {
     expect(await check(await header(secret))).toBe("ok");
   });
 
+  // Computed outside the repository code, so a bug in signPayload() and in the helpers cannot hide each other:
+  //   printf '%s' '1762300000.{"type":"lead"}' | openssl dgst -sha256 -hmac 'test-partner-a-secret'
+  it("PB-3 R-11 a signature matches a vector computed with openssl", async () => {
+    const expected = "21616546dd8456dae4ba84a88257532f4b3205f419763767490fbfe9d7286963";
+    expect(await signPayload(secret, t, body)).toBe(expected);
+    expect(await check(`t=1762300000,v1=${expected}`)).toBe("ok");
+  });
+
   it("PB-3 R-11 no header gives missing", async () => {
     expect(await check(undefined)).toBe("missing");
   });

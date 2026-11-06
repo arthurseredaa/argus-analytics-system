@@ -283,7 +283,7 @@ Estimate: 2.75 hours.
 
 Goal: a reviewer can install, run, test and repeat the demo from the README alone, and the quiz page works in a real browser. DEMO-1, DEMO-7, DEMO-9, DLV-1, DLV-3, DLV-4, DLV-5, NFR-8 step 3.
 
-Files: `README.md`, `scripts/demo.sh`.
+Files: `README.md`, `tests/e2e/quiz.spec.ts` (the `/go?prelander=demo` link, DEMO-9), `tests/unit/signature.test.ts` (a known-answer HMAC vector computed with openssl), the NFR-6 card's result line.
 
 Read first: the DEMO and DLV rows of requirements.md; cards DEMO-1, DEMO-7, DEMO-9, NFR-8.
 
@@ -292,11 +292,11 @@ Content: an "Architecture in the code" section first: the diagram from design.md
 Browser smoke test (Fable's proposal, accepted by Arthur on 2026-11-04): the test already exists in `tests/e2e/quiz.spec.ts` and runs in CI against `wrangler dev`. This stage adds the `/go?prelander=demo` link assertion and the run against the deployed `BASE`. The scenario: a fresh context opens `/p/demo`, answers women and asia, enters `user1@example.com`, sees the offer name for 003 and the `/go?prelander=demo` link, and `GET /__test/state` with the context's cookie lists `prelander_viewed`, `step_viewed` 1 to 3, `step_answered` 1 and 2, `quiz_completed` and `offer_selected`, in arrival order: the browser's five events carry `seq` 1 to 5 and the server's three carry none. The browser never follows `/go` (DEMO-9). Playwright is a dev dependency only; `pnpm test:browser` is not part of `pnpm test`.
 
 Steps:
-- [ ] Draft through the humanizer skill; Arthur reads it whole.
-- [ ] Add the `/go?prelander=demo` link assertion to `tests/e2e/quiz.spec.ts` and run it against `BASE`; fix whatever it finds in the page's JavaScript.
-- [ ] Explain back: Arthur runs the demo from the README, saying what each command proves.
-- [ ] Verify: `git clone` into `$TMP/fresh` and follow only the README (`pnpm install`, the gate, `wrangler dev` with the demo script, the demo script against `BASE`), output pasted, every step matching the README; the DEMO-7 card finds each README row in the decision table with the same result; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" README.md tests/` prints nothing; the CI badge shows green; `BASE=$BASE pnpm test:browser` passes, its summary pasted; the test asserts that the eight events arrive in order, the browser's five with `seq` 1 to 5 and the server's three with none.
-- [ ] Approval, commit `docs: README, demo instructions and the implementation split`, push.
+- [ ] Draft through the humanizer skill; Arthur reads it whole. (Drafted, reviewed by Opus and read cold by Fable; Arthur reads it before the hand-in.)
+- [x] Add the `/go?prelander=demo` link assertion to `tests/e2e/quiz.spec.ts` and run it against `BASE`; fix whatever it finds in the page's JavaScript.
+- [x] Explain back: Arthur runs the demo from the README, saying what each command proves.
+- [x] Verify: `git clone` into `$TMP/fresh` and follow only the README (`pnpm install`, the gate, `wrangler dev` with the demo script, the demo script against `BASE`), output pasted, every step matching the README; the DEMO-7 card finds each README row in the decision table with the same result; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" README.md tests/` prints nothing; the CI badge shows green; `BASE=$BASE pnpm test:browser` passes, its summary pasted; the test asserts that the eight events arrive in order, the browser's five with `seq` 1 to 5 and the server's three with none.
+- [x] Approval, commit `docs: README, demo instructions and the implementation split`, push.
 
 ---
 
@@ -381,7 +381,7 @@ The list Arthur walks through at the review, so nothing built is forgotten. Each
 | The event path: Queue, files in R2, the loader, and what the loader-paused drill showed | `curl $BASE/__test/health`, `pnpm sink outage on --remote`, the drill numbers in ADR 0005's Outcome | 5 |
 | Alerts and latency: the data points, the alert log line for a wrong secret | the Analytics Engine SQL query for p95 per endpoint, `wrangler tail` with `alert_run` and `postbacks_without_conversions`, `curl $BASE/__probe` | 6 |
 | The path to production: a push to `main`, tests, migrations, deploy, `/healthz` with the commit | the CI run list | 0 |
-| Where the architecture lives in the code | README "Architecture in the code", the folder comments | 7 |
+| Where the architecture lives in the code | README "What it does", "Implemented, simulated, design-only" and "Architecture in the code", the folder comments | 7 |
 | Tests at four levels and the browser smoke run | `pnpm test` output, the Playwright summary | 7 |
 | The cost: spend to date and the monthly figure at 12M and 18M events | README spend line, nfr.md cost table | 0, 9 |
 | How the system changes: the six changes and their places | design.md section 10, answered live | 10 |

@@ -792,6 +792,8 @@ Manual:
 
 Expected: p95 per endpoint at or below the targets in nfr.md, at average and at peak. k6 and the dashboard agree within the margin the metrics document allows. The run location is recorded next to the numbers.
 
+Result, 2026-11-06, after the stage 6 deploy (main 4b6ca3b), one demo run from the author's laptop, read through the Analytics Engine SQL API for the hour: `POST /api/events` 383 ms over 5 requests, `POST /postback/v1/:partner` 163 ms over 5, `GET /go` 60 ms over 1, `GET /p/:prelander` 59 ms over 2, `POST /api/complete` 41 ms over 1, `GET /api/report` 26 ms over 42. These samples are too small for a p95 and include cold starts; the load test of stage 9 gives the numbers to compare. `GET /__probe` answered `200` five times in 0.106 to 0.141 s. On the same deploy the alert run logged `"unavailable":[]`, so the SQL API and `Queue.metrics()` on both queues are readable on Cloudflare.
+
 ### NFR-7 Geography is an agreed assumption
 
 Depends on: Q-2.

@@ -62,12 +62,15 @@
     {
       "id": 7,
       "title": "README and demo",
-      "status": "next"
+      "status": "done",
+      "closed": "2026-11-06",
+      "verified": "pnpm check (524 passed, 50 files); pnpm test:browser locally (1 passed, email-scan clean); pnpm test -t \"PB-3 R-11 a signature matches\" (1 passed); fresh clone from GitHub following only the README: pnpm install, .dev.vars, pnpm migrate:local, pnpm seed --local, pnpm check (524 passed), pnpm dev and curl /healthz ({\"sha\":\"dev\"}), pnpm test:e2e (demo passed against http://localhost:8787); pnpm lint:docs clean. BASE=$BASE pnpm test:browser and pnpm test:e2e --base run right after this commit deploys.",
+      "notes": "Built from docs/plans/part2-stage-7-readme.md: the README written by Opus, the two test additions by Sonnet, the README reviewed by Opus against the stage text and read cold by Fable as the company's reviewer would, one fix round and a scoped re-review. The README opens with what the system does, then the implemented, simulated and design-only split and what to read first, then the architecture in the code; this order follows the cold read, not the stage text's order. It says plainly that the deployed demo's postback steps (DEMO-3, DEMO-5, DEMO-6) need a partner secret only the author holds, so reviewers run them locally, and that the /__test/* routes are open on the deployed demo by choice. The browser test now checks the /go?prelander=demo link and that the browser never requests /go (DEMO-9). tests/unit/signature.test.ts carries a known-answer HMAC vector computed with openssl, checked again by the controller. Defects the reviews found and fixed: the dead letter queue redrive sketch acked messages whose send back failed, and left a pull consumer attached whose retry limit deletes messages (now curl -sf, a jq success check before the ack, and a trap that removes the consumer on every exit); secret rotation was described as not built, while accepting the previous secret is built and tested. Stage 6 deployed checks, recorded here (ruling R4): the email absent from a wrangler tail capture and from the remote scan (clean, tail 7,176 lines, 3 R2 files, 14 events rows); alert_run with unavailable [] on Cloudflare, so the SQL API and Queue.metrics() work; the quarantine drill fired quarantine_new_row 330 s after the postback (the first try missed the row because the new alert cron started about 10 minutes after the deploy and its 5-minute look-back began after the row); /__probe 200 in 0.106 to 0.141 s; p95 from one demo run in the NFR-6 card; AN-5 on BASE moved yesterday's cohort Purchase and today's postback Purchase by one each. Fresh clone from GitHub, following only the README: pnpm install, .dev.vars, migrate, seed, pnpm check (524 passed), pnpm dev with {\"sha\":\"dev\"}, pnpm test:e2e demo passed against http://localhost:8787. Open: the spend line is [spend] until Arthur reads the billing page; Arthur reads the README whole before the hand-in; publishing a demo partner secret for the deployed Worker is Arthur's call. Deferred: catalog_config_error logging at /go and entry (known limitation in the README). BASE=$BASE pnpm test:browser runs right after this commit deploys. Explain-back for Arthur, not blocking: run the demo from the README and say what each command proves."
     },
     {
       "id": 8,
       "title": "AI evidence",
-      "status": "pending"
+      "status": "next"
     },
     {
       "id": 9,

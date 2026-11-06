@@ -1,5 +1,6 @@
 // Browser test: a visitor takes the quiz in a real browser and gets the offer for their answers.
-// Serves QZ-1, ID-4 and R-12: the events reach the store in order, and the email travels in one request only.
+// Serves QZ-1, ID-4, R-12 and DEMO-9: the events reach the store in order, the email travels in one request only,
+// and the offer link points at /go but the browser never follows it.
 import { expect, test } from "@playwright/test";
 
 const EMAIL = "user1@example.com";
@@ -18,7 +19,7 @@ const EXPECTED_TYPES = [
 type StoredEvent = { type: string; seq: number | null; visit_id: string };
 type State = { me: { events: StoredEvent[] } };
 
-test("QZ-1 ID-4 R-12 a visitor takes the quiz, gets Asia Connect, and the email stays out of every other request", async ({
+test("QZ-1 ID-4 R-12 DEMO-9 a visitor takes the quiz, gets Asia Connect, and the email stays out of every other request", async ({
   page,
 }) => {
   test.setTimeout(150_000);
@@ -38,6 +39,10 @@ test("QZ-1 ID-4 R-12 a visitor takes the quiz, gets Asia Connect, and the email 
 
   await expect(page.locator('section[data-result="offer"]')).toBeVisible();
   await expect(page.locator("[data-offer-name]")).toHaveText("Asia Connect");
+  await expect(page.locator('section[data-result="offer"] a')).toHaveAttribute(
+    "href",
+    `/go?prelander=demo&visit=${visit}`,
+  );
 
   // The Queue holds a batch up to 30 s (max_batch_timeout), the consumer writes it to R2, and the loader moves it
   // into D1 on its next run (the dev server ticks every 10 s, the deployed cron once a minute),
@@ -74,4 +79,6 @@ test("QZ-1 ID-4 R-12 a visitor takes the quiz, gets Asia Connect, and the email 
   expect(withEmail.map((r) => `${r.method} ${new URL(r.url).pathname}`)).toEqual([
     "POST /api/complete",
   ]);
+  // DEMO-9: the offer link is shown, but the test never clicks it.
+  expect(requests.filter((r) => new URL(r.url).pathname === "/go")).toEqual([]);
 });
