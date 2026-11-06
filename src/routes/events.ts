@@ -5,6 +5,7 @@ import type { AppEnv } from "../app.ts";
 import type { Flow } from "../domain/flow.ts";
 import { checkIncoming } from "../events/envelope.ts";
 import { EventsUnavailable, sendEvent } from "../events/producer.ts";
+import { readLimited } from "./body.ts";
 
 const MAX_BODY_BYTES = 4096;
 
@@ -15,11 +16,9 @@ export function eventsRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   const route = new Hono<AppEnv>();
 
   route.post("/events", async (c) => {
-    const declared = Number(c.req.header("content-length"));
-    if (declared > MAX_BODY_BYTES) return c.json({ error: "too_large" }, 413);
-    const text = await c.req.text();
-    if (new TextEncoder().encode(text).length > MAX_BODY_BYTES)
-      return c.json({ error: "too_large" }, 413);
+    const bytes = await readLimited(c.req.raw, MAX_BODY_BYTES);
+    if (bytes === null) return c.json({ error: "too_large" }, 413);
+    const text = new TextDecoder().decode(bytes);
 
     // The parse error is not logged: V8 quotes part of the input in its message.
     let raw: unknown;

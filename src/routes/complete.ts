@@ -1,5 +1,5 @@
 // Route: POST /api/complete, the quiz completion.
-// Implements ADR 0002, ADR 0004 and "Quiz completion" of data-model.md; serves ID-1, QZ-1 to QZ-4, OFF-2, OFF-10, DEMO-8, NFR-4, R-12.
+// Implements ADR 0002, ADR 0004 and "Quiz completion" of data-model.md; serves ID-1, QZ-1 to QZ-4, OFF-2, OFF-10, DEMO-8, NFR-2, NFR-4, R-12.
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../app.ts";
@@ -9,6 +9,10 @@ import { validateAnswers, type Flow } from "../domain/flow.ts";
 import { select } from "../domain/select.ts";
 import { isValidVisitId, makeServerEvent } from "../events/envelope.ts";
 import { emitInBackground } from "../events/producer.ts";
+import { readLimited } from "./body.ts";
+
+// NFR-2: a completion is a prelander id, a few answers and one email, far below 4 KB.
+const MAX_BODY_BYTES = 4096;
 
 const bodySchema = z.object({
   prelander_id: z.string(),
@@ -45,10 +49,13 @@ export function completeRoute(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   const route = new Hono<AppEnv>();
 
   route.post("/complete", async (c) => {
+    const bytes = await readLimited(c.req.raw, MAX_BODY_BYTES);
+    if (bytes === null) return c.json({ error: "too_large" }, 413);
+
     // The parse error is not logged: V8 quotes part of the input in its message.
     let raw: unknown;
     try {
-      raw = JSON.parse(await c.req.text());
+      raw = JSON.parse(new TextDecoder().decode(bytes));
     } catch {
       return c.json(rejected(undefined, []), 400);
     }
