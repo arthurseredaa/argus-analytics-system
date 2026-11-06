@@ -33,6 +33,14 @@ describe("event envelope", () => {
   it("ID-1 event id that is not a UUID is rejected", () => {
     expect(check(browserEvent({ event_id: "abc" }))).toEqual(invalid(["event_id"]));
   });
+  it("ID-1 an event id in upper case is rejected, so one id cannot be stored twice", () => {
+    const id = crypto.randomUUID().toUpperCase();
+    expect(check(browserEvent({ event_id: id }))).toEqual(invalid(["event_id"]));
+  });
+  it("R-27 a browser event cannot take the version 8 id of a postback event", async () => {
+    const id = await derivedEventId(["partner-a", "lead", "tx-1"]);
+    expect(check(browserEvent({ event_id: id }))).toEqual(invalid(["event_id"]));
+  });
   it("ID-1 a request with more than one event is rejected", () => {
     expect(check([browserEvent(), browserEvent()])).toEqual(invalid([]));
     expect(check(null)).toEqual(invalid([]));

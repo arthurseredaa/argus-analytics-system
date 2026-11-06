@@ -37,7 +37,7 @@ Set on 2026-11-03 in stage 4 of `docs/plans/part1-design-document.md`. The defin
 
 | ID | Figure | Value | Arithmetic or method | Source |
 |---|---|---|---|---|
-| NFR-2 | Body limit of `POST /api/events` | 4 KB (4,096 bytes); larger bodies get `413` | one event is about 1 KB (ADR 0005), four times headroom | Part 2 stage 2, 2026-11-05 |
+| NFR-2 | Body limit of `POST /api/events` and `POST /api/complete` | 4 KB (4,096 bytes), counted while the body streams; larger bodies get `413` | one event is about 1 KB (ADR 0005), four times headroom; a completion holds a few answers and one email | Part 2 stage 2, 2026-11-05; `/api/complete` and the streamed count added after the security audit, 2026-11-06 |
 | NFR-6 | p95 latency of `POST /api/events`, server side | at most 50 ms over a rolling 15-minute window | validation and one Queue send, no D1 | Arthur's decision, 2026-11-03 |
 | NFR-6 | p95 latency of `GET /p/{prelander}`, `POST /api/complete`, `GET /go`, server side | at most 300 ms over a rolling 15-minute window | one D1 batch to a database in one region | Arthur's decision, 2026-11-03; geography from Q-2, NFR-7 |
 | NFR-6 | p95 latency of `POST /postback/v1/{partner}`, server side | at most 300 ms over a rolling 15-minute window | signature check, click lookup, one insert | Arthur's decision, 2026-11-03 |

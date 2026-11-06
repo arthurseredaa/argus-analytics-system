@@ -1,6 +1,6 @@
 // The Hono app: healthz, the identity middleware and the routes.
 // Implements ADR 0002 (identity before the pages, `/go` and the two browser APIs; the report and
-// postbacks have none); serves ID-2, R-12, DLV-1.
+// postbacks have none); serves ID-2, R-12, R-26, DLV-1.
 import { Hono } from "hono";
 import type { Flow } from "./domain/flow.ts";
 import { completeRoute } from "./routes/complete.ts";
@@ -12,6 +12,7 @@ import { postbackRoute } from "./routes/postback.ts";
 import { prelanderRoute } from "./routes/prelander.ts";
 import { probeRoute } from "./routes/probe.ts";
 import { reportRoute } from "./routes/report.ts";
+import { sameOrigin } from "./routes/same-origin.ts";
 import { testRoute } from "./routes/test.ts";
 
 export type AppEnv = {
@@ -26,6 +27,10 @@ export function createApp(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   app.use("*", requestMetrics());
 
   app.get("/healthz", (c) => c.json({ sha: c.env.GIT_SHA }));
+
+  // Before identity, so a cross-site POST is refused before it gets a new cookie (R-26).
+  app.use("/api/events", sameOrigin());
+  app.use("/api/complete", sameOrigin());
 
   app.use("/p/*", identity());
   // Only the two browser endpoints get a user id; the report is open and sets no cookie.

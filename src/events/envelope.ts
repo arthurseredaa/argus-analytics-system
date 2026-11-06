@@ -1,5 +1,5 @@
 // Events: the event envelope, its check at the edge and the shape of a stored event.
-// Implements ADR 0005 and "Event envelope" of data-model.md; serves ID-1, ID-2, ID-4, BIZ-2, QZ-1, QZ-4, R-12, R-14.
+// Implements ADR 0005 and "Event envelope" of data-model.md; serves ID-1, ID-2, ID-4, BIZ-2, QZ-1, QZ-4, R-12, R-14, R-27.
 // The Worker sets user_id and received_at, so a client that sends them is ignored, not rejected.
 import { z } from "zod";
 import type { Flow } from "../domain/flow.ts";
@@ -39,8 +39,13 @@ const payloadSchema = z
   .record(z.string(), z.unknown())
   .refine((payload) => payloadDepth(payload) <= MAX_PAYLOAD_DEPTH);
 
+// A browser EventID is a lowercase UUID v4, the shape crypto.randomUUID() makes. So one id cannot
+// arrive in two letter cases (ID-1), and a client cannot take the version 8 id that
+// derivedEventId() gives a postback event (R-27). Stored events still accept both shapes.
+const BROWSER_EVENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
 const envelopeSchema = z.strictObject({
-  event_id: z.uuid(),
+  event_id: z.string().regex(BROWSER_EVENT_ID),
   schema_version: z.int().min(1).max(1000),
   type: z.string().regex(typePattern),
   client_time: z.int().min(0),

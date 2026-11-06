@@ -17,6 +17,19 @@ const spyConsole = () => [
 const logged = (spies: ReturnType<typeof spyConsole>) =>
   JSON.stringify(spies.flatMap((s) => s.mock.calls));
 
+// One browser event posted with extra request headers, such as Origin and Sec-Fetch-Site.
+async function postWith(headers: Record<string, string>, queue: Queue): Promise<Response> {
+  const req = new Request("https://example.com/api/events", {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: newCookie(), ...headers },
+    body: JSON.stringify(browserEvent()),
+  });
+  const ctx = createExecutionContext();
+  const res = await createApp(prelanderFlows).fetch(req, { ...env, EVENTS_QUEUE: queue }, ctx);
+  await waitOnExecutionContext(ctx);
+  return res;
+}
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("POST /api/events", () => {
@@ -203,6 +216,62 @@ describe("POST /api/events", () => {
     expect(res.status).toBe(413);
     expect(await res.json()).toEqual({ error: "too_large" });
     expect(sent).toHaveLength(0);
+  });
+
+  it("R-14 a streamed body over 4 KB without content-length is rejected with 413", async () => {
+    const { queue, sent } = captureQueue();
+    const chunk = new TextEncoder().encode("x".repeat(1024));
+    let pulls = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        if (pulls > 64) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    const req = new Request("https://example.com/api/events", {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: newCookie() },
+      body,
+    });
+    expect(req.headers.get("content-length")).toBeNull();
+    const ctx = createExecutionContext();
+    const res = await createApp(prelanderFlows).fetch(req, { ...env, EVENTS_QUEUE: queue }, ctx);
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "too_large" });
+    expect(sent).toHaveLength(0);
+    // The read stopped near the cap instead of taking all 64 KB.
+    expect(pulls).toBeLessThan(10);
+  });
+
+  it("R-26 a cross-site POST is refused with 403, gets no cookie and sends nothing", async () => {
+    const { queue, sent } = captureQueue();
+    const res = await postWith(
+      { "sec-fetch-site": "cross-site", origin: "https://other.example" },
+      queue,
+    );
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "cross_site" });
+    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("R-26 a POST with a foreign Origin and no Sec-Fetch-Site is refused with 403", async () => {
+    const { queue, sent } = captureQueue();
+    const res = await postWith({ origin: "https://other.example" }, queue);
+    expect(res.status).toBe(403);
+    expect(sent).toHaveLength(0);
+  });
+
+  it("R-26 a same-origin browser POST is accepted", async () => {
+    const { queue, sent } = captureQueue();
+    const res = await postWith(
+      { "sec-fetch-site": "same-origin", origin: "https://example.com" },
+      queue,
+    );
+    expect(res.status).toBe(202);
+    expect(sent).toHaveLength(1);
   });
 
   it("NFR-4 the event answers 503 with Retry-After when the Queue and R2 both refuse", async () => {

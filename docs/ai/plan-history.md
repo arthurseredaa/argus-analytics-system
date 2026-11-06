@@ -152,3 +152,7 @@ The load test missed one target. `POST /api/events` had a server-side p95 of 74 
 The controller run also went against the plan's order. It ran from the stage branch before the merge, because the stage changes no Worker code and the deployed Worker was already main 16d26e9. The results land in the stage PR instead of a follow-up PR.
 
 Stage 8 moved after stage 9. No stage was added.
+
+## 2026-11-06: a security audit before stage 10
+
+Arthur noticed that the `security-audit` skill had never been run on the code. It ran before stage 10 as a `quick` audit that read source only, since Arthur chose not to let it run code. No finding was confirmed, and seven leads were left for validation. The AI proposed two groups. The small fixes would go in now: a streamed body cap on `/api/events` and `/api/complete`, a same-origin check on both, and browser EventIDs limited to lowercase UUID v4. Rate limiting would wait for Arthur's call. Arthur took the fixes and put rate limiting outside the MVP: "там де треба моє рішення - написати "не в mvp", не хочу ще витрачати час на фікси". The fixes, R-25 to R-27, the new R-14 text and `docs/testing/security-audit.md` went in one PR. No stage was added, and stage 10 is still next.

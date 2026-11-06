@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../../src/app.ts";
 import demoJson from "../../config/prelanders/demo.json";
@@ -199,6 +199,27 @@ describe("POST /api/complete", () => {
     const res = await postComplete(make("women", "asia", email), cookie);
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: "invalid_body", fields: ["email"] });
+    expect(await userRow(cookie)).toBeNull();
+  });
+
+  it("NFR-2 a completion body over 4 KB is rejected with 413 and nothing is stored", async () => {
+    const cookie = newCookie();
+    const body = JSON.stringify({ ...make("women", "asia"), pad: "x".repeat(5000) });
+    const res = await postComplete(body, cookie);
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "too_large" });
+    expect(await userRow(cookie)).toBeNull();
+  });
+
+  it("R-26 a cross-site completion is refused with 403 and nothing is stored", async () => {
+    const cookie = newCookie();
+    const res = await SELF.fetch("https://example.com/api/complete", {
+      method: "POST",
+      headers: { "content-type": "text/plain", cookie, "sec-fetch-site": "cross-site" },
+      body: JSON.stringify(make("women", "asia")),
+    });
+    expect(res.status).toBe(403);
+    expect(res.headers.get("set-cookie")).toBeNull();
     expect(await userRow(cookie)).toBeNull();
   });
 
