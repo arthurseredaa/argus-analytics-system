@@ -365,6 +365,10 @@ One Worker, not a monorepo. `src/index.ts` exports `fetch`, `queue` and `schedul
 
 No frontend framework. The Worker renders the quiz and the report as HTML, with a small inline script on the quiz page. The two pages share no state, routing or auth, and a prelander needs a fast first byte on a mobile in-app browser. A framework comes in with an admin panel, a funnel constructor or a reports cabinet, which MVP-3 leaves out; the cheapest step then is a Vite and React build served as static assets by the same Worker.
 
+## AI work log
+
+The agent instructions, the initial plan with its changes, and the three examples the spec asks for are listed in [docs/ai/README.md](docs/ai/README.md).
+
 ## Spend to date
 
 2026-11-04: account on Workers Paid, $5 a month. The design assumes Paid (Queue retention, D1 size); the demo alone would fit on Free.
