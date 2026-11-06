@@ -63,6 +63,23 @@ Set on 2026-11-03 in stage 4 of `docs/plans/part1-design-document.md`. The defin
 | NFR-1 | BigQuery storage at the design load | about 18 GiB more each month; $0.18 in month 1, about $4.74 in month 12 | (18 − 10 free) × $0.023; (216 − 10) × $0.023 | BigQuery limits below |
 | NFR-1 | Monthly total at the design load | $28.90 in month 1 ($30.90 if Analytics Engine is billed); about $33.50 in month 12 ($35.50) | $28.60 below + R2 $0.12 + BigQuery $0.18; BigQuery storage adds about $0.41 a month | derived here |
 
+## Measured in Part 2 stage 9
+
+Measured on 2026-11-06 against the deployed Worker (main 16d26e9) with k6 v2.3.0 from the author's laptop in Poland. Every request was served by the WAW colo. Server-side figures come from the Analytics Engine SQL API, weighted by `_sample_interval`. The run and the method are in the NFR-2 and NFR-6 cards of `docs/testing/acceptance-checks.md`.
+
+| ID | Figure | Measured | Target | Verdict |
+|---|---|---|---|---|
+| NFR-2 | Spec peak, 200 events/s for 5 minutes | 59,990 requests, all `202`, 0 failed, 0 `429` | under 1% failed | met |
+| NFR-2 | Stored against accepted | 59,990 rows for 1,000 users, equal to the `202` count | equal | met |
+| NFR-2 | Drain after the peak | queue and `pending/` empty 241 s after k6 stopped | | measured |
+| NFR-6 | Analytics Engine count against k6 | 59,990 and 59,990 | within 20% | met |
+| NFR-6 | p95 of `POST /api/events`, server side, at peak | 74 ms (p50 61 ms; 72 to 75 ms per minute) | at most 50 ms | not met, R-24 |
+| NFR-6 | p95 of `POST /api/events`, k6 from the laptop | 97.7 ms (p50 81.7 ms) | not a target | measured |
+| NFR-6 | Facts read, `GET /__probe`, server side, 600 requests at 10/s | p50 24 ms, p95 31 ms, p99 36 ms | 300 ms for the selection endpoints | met |
+| R-15 | D1 overload errors during the peak | 0 | 0 | met |
+
+The 74 ms is the Queue send. Cloudflare gives about 60 ms as the median latency of a Queue write, which returns after the message is persisted ([How we built Cloudflare Queues](https://blog.cloudflare.com/how-we-built-cloudflare-queues/), 2024-10-24), and publishes no p95. The 50 ms target assumed a faster send and stays as it was set; the miss is recorded, not hidden by a new number.
+
 ## Still to be set
 
 These are required by the spec but have no number yet. The stage of `docs/plans/part1-design-document.md` that sets each one is named.

@@ -36,6 +36,7 @@ Things that can break correctness, cost or the delivery itself. "Mitigation" is 
 | R-17 | Report queries scan the whole event table. | Slow reports, cost per row read. | Pre-aggregated counters or indexed queries. | Measure rows read per report. |
 | R-18 | The edge is close to users but the database is in one region. | Latency target missed for distant users. | Keep the hot path to one round trip; cache the catalog at the edge. | Latency measured by region. |
 | R-19 | Some services need a paid plan. | Unexpected spend. | Confirm pricing in research; agree budget (Q-17). | Cost table in the design. |
+| R-24 | The Queue send takes about 60 ms at the median, so `POST /api/events` cannot meet its 50 ms p95 while it waits for the send (measured 74 ms at peak, Part 2 stage 9). | The NFR-6 target for event intake is missed. The browser waits about 60 ms longer per event; the quiz does not wait for it. | Accepted for the MVP; the target stays at 50 ms. Answering `202` before the send (`waitUntil`) would meet it, but a `202` would no longer mean the event is persisted and the `503` answer would go: that needs an ADR that supersedes ADR 0005. | The `load/peak.js` run and the server-side p95 from Analytics Engine (NFR-2, NFR-6 cards). |
 
 ## Delivery
 

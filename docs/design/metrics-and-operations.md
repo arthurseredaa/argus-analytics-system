@@ -133,6 +133,8 @@ Targets, server side, p95 per endpoint over a rolling 15-minute window ([nfr.md,
 | `GET /p/{prelander}`, `POST /api/complete`, `GET /go` | 300 ms | one D1 batch to a database in one region, then `select()` |
 | `POST /postback/v1/{partner}` | 300 ms | signature check, click lookup and one insert in D1 |
 
+The load test of Part 2 stage 9 measured 74 ms for `POST /api/events` at peak, so the 50 ms target is not met: the Queue send alone takes about 60 ms at the median. The numbers are in [nfr.md, Measured in Part 2 stage 9](../requirements/nfr.md#measured-in-part-2-stage-9), the risk is R-24.
+
 How it is measured:
 
 1. The Worker records, for every request, the time from receipt to response as one data point in Workers Analytics Engine: index = endpoint, doubles = duration in ms and HTTP status, blobs = country and Cloudflare location from `request.cf`, so p95 can be split by region (R-18). Analytics Engine includes 10M data points a month on Paid, is not billed at the moment, and keeps data for 3 months ([nfr.md, Cloudflare](../requirements/nfr.md#cloudflare)). `blob1` is the kind of point, so every query filters on one column:

@@ -333,10 +333,10 @@ Read first: cards NFR-2, NFR-6; the p95 targets in [nfr.md](../requirements/nfr.
 Content: 200 events/s for 5 minutes against the deployed Worker, one `POST /api/events` per iteration with a new `event_id` for one of many synthetic users: 60,000 requests and about 180,000 Queue operations. On Paid that falls inside the included amounts; past them it is about 2 cents of requests and 7 cents of Queue at the nfr.md prices. The 2x and 5x runs of P-7 only if Arthur agrees on the day.
 
 Steps:
-- [ ] Announce the run and its cost, then run it.
+- [x] Announce the run and its cost, then run it.
 - [ ] Explain back: Arthur reads the summary and names the number that would make him leave D1 (ADR 0003 migration triggers).
-- [ ] Verify: `k6 run -e BASE=$BASE --summary-export $TMP/peak.json load/peak.js` gives p95 for `/api/events` against 50 ms and an error rate, both recorded; stored events equal the `202` count once `__test/health` shows an empty buffer; the dashboard request count for the window is within 20% of k6's; the cost line is in the README.
-- [ ] Approval, commit `test: load test at 200 events/s`, push.
+- [x] Verify: `k6 run -e BASE=$BASE --summary-export $TMP/peak.json load/peak.js` gives p95 for `/api/events` against 50 ms and an error rate, both recorded; stored events equal the `202` count once `__test/health` shows an empty buffer; the dashboard request count for the window is within 20% of k6's; the cost line is in the README.
+- [x] Approval, commit `test: load test at 200 events/s`, push.
 
 ---
 
@@ -383,6 +383,7 @@ The list Arthur walks through at the review, so nothing built is forgotten. Each
 | The path to production: a push to `main`, tests, migrations, deploy, `/healthz` with the commit | the CI run list | 0 |
 | Where the architecture lives in the code | README "What it does", "Implemented, simulated, design-only" and "Architecture in the code", the folder comments | 7 |
 | Tests at four levels and the browser smoke run | `pnpm test` output, the Playwright summary | 7 |
+| The spec peak: 200 events/s for 5 minutes, every accepted event stored, and the one target it missed with the cause | nfr.md "Measured in Part 2 stage 9", the NFR-2 and NFR-6 results, R-24, `load/peak.js` | 9 |
 | The cost: spend to date and the monthly figure at 12M and 18M events | README spend line, nfr.md cost table | 0, 9 |
 | How the system changes: the six changes and their places | design.md section 10, answered live | 10 |
 | The live task: a fourth quiz question from branch to production in 10 minutes, with AI | branch, PR, CI, merge to `main`, the deployed page; CSV export as the backup | 10 |
