@@ -45,6 +45,7 @@ Set on 2026-11-03 in stage 4 of `docs/plans/part1-design-document.md`. The defin
 | NFR-6 | Synthetic probe, end to end | p95 at most 500 ms; every 5 minutes from one EU and one US location; alert after two consecutive failures | `GET /__probe`: the entry D1 batch for a UserID without rows, no events | Arthur's decision, 2026-11-03 |
 | NFR-6 | Allowed difference between k6 and the dashboard for the same window | 20% | | Arthur's decision, 2026-11-03 |
 | NFR-6 | Latency data points in Analytics Engine | about 18M a month, one per request; $0 today, $2.00 a month if billing starts | 18M − 10M included = 8M × $0.25 | platform limits, Analytics Engine |
+| PB-3 | Alert `postbacks_without_conversions` | at least 5 postback requests in 15 minutes from one partner and none accepted | the request count is kept per partner and minute in `postback_counts` | Part 2 stage 6, part2-mvp-stages.md |
 | NFR-6 | Probe traffic | about 580 Worker requests a day, no events | 2 locations × 288 runs | derived here |
 | NFR-3 | Freshness in production, normal operation | up to 30 s consumer wait, plus up to 5 minutes to the next loader run, plus the load job; alert above 15 minutes | | ADR 0005, ADR 0006 |
 | NFR-3 | Freshness in the MVP | about a minute | up to 30 s consumer wait plus a loader run every minute | ADR 0005 |

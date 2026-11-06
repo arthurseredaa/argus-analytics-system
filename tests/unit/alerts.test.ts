@@ -43,6 +43,7 @@ function readings(overrides: Partial<AlertReadings> = {}): AlertReadings {
     dlqBacklog: 0,
     rejectedNew: 0,
     quarantineNew: 0,
+    postbacks: [],
     sizes: null,
     ...overrides,
   };
@@ -108,6 +109,18 @@ describe("evaluateAlerts", () => {
     ]);
     expect(ids(readings({ quarantineNew: 0 }))).toEqual([]);
     expect(ids(readings({ quarantineNew: null }))).toEqual([]);
+  });
+
+  it("PB-3 postbacks_without_conversions fires at 5 requests with none accepted", () => {
+    const fires = readings({ postbacks: [{ partner_id: "p1", requests: 5, accepted: 0 }] });
+    expect(evaluateAlerts(fires, T)).toEqual([
+      { id: "postbacks_without_conversions", value: 5, threshold: 5, partner_id: "p1" },
+    ]);
+    const few = readings({ postbacks: [{ partner_id: "p1", requests: 4, accepted: 0 }] });
+    expect(ids(few)).toEqual([]);
+    const converting = readings({ postbacks: [{ partner_id: "p1", requests: 9, accepted: 1 }] });
+    expect(ids(converting)).toEqual([]);
+    expect(ids(readings({ postbacks: null }))).toEqual([]);
   });
 
   it("NFR-5 dlq_not_empty fires on any message", () => {

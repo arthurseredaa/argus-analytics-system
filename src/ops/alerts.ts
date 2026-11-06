@@ -3,12 +3,15 @@
 // An alert is a rule over `AlertReadings`. A reading that is `null` is unknown or not due, and an unknown reading never fires.
 import { z } from "zod";
 import { countQuarantineBetween, databaseSize } from "../db/ops.ts";
+import { deletePostbackCountsBefore, postbackCountsSince } from "../db/postback-counts.ts";
 import { ALERT_STATE_KEY, REJECTED_PREFIX, listKeys } from "../events/files.ts";
 import { readHealth, type PipelineHealth } from "../events/health.ts";
 import { d1SizePoint, pipelinePoint, writePoint } from "./metrics.ts";
 
 export const ALERT_CRON = "*/5 * * * *";
 export const SIZE_CHECK_EVERY_MS = 86_400_000;
+// The run deletes postback counts older than this.
+const POSTBACK_COUNTS_KEEP_MS = 86_400_000;
 // A run with no stored state looks this far back for new files and rows.
 export const LOOK_BACK_MS = 300_000;
 
@@ -57,6 +60,7 @@ export type AlertReadings = {
   dlqBacklog: number | null;
   rejectedNew: number | null;
   quarantineNew: number | null;
+  postbacks: { partner_id: string; requests: number; accepted: number }[] | null;
   sizes: { facts: number; events: number } | null;
 };
 
@@ -91,6 +95,16 @@ const RULES: Rule[] = [
   ({ rejectedNew }) => above("rejected_new_file", rejectedNew, 0),
   ({ quarantineNew }) => above("quarantine_new_row", quarantineNew, 0),
   ({ dlqBacklog }) => above("dlq_not_empty", dlqBacklog, 0),
+  // Per partner: enough requests in the window and none accepted (a wrong secret, a broken click lookup).
+  ({ postbacks }, t) =>
+    (postbacks ?? [])
+      .filter((p) => p.requests >= t.postbacks_min_requests && p.accepted === 0)
+      .map((p) => ({
+        id: "postbacks_without_conversions" as const,
+        value: p.requests,
+        threshold: t.postbacks_min_requests,
+        partner_id: p.partner_id,
+      })),
   ({ sizes }, t) => above("d1_facts_size", sizes?.facts ?? null, t.d1_facts_size_bytes),
   ({ sizes }, t) => above("d1_events_size", sizes?.events ?? null, t.d1_events_size_bytes),
 ];
@@ -170,7 +184,7 @@ export async function runAlerts(
   const after = state?.checked_at ?? now - LOOK_BACK_MS;
   const sizesDue = state === null || now - state.sizes_checked_at >= SIZE_CHECK_EVERY_MS;
 
-  const [health, rejected, quarantine, queue, dlq, sizes] = await Promise.all([
+  const [health, rejected, quarantine, postbacks, queue, dlq, sizes] = await Promise.all([
     readSource("pipeline_health", ["freshness_lag", "pending_oldest_file"], () =>
       readHealth(env, now),
     ),
@@ -179,6 +193,9 @@ export async function runAlerts(
     ),
     readSource("quarantine", ["quarantine_new_row"], () =>
       countQuarantineBetween(env.FACTS, after, now),
+    ),
+    readSource("postback_counts", ["postbacks_without_conversions"], () =>
+      postbackCountsSince(env.FACTS, now - thresholds.postbacks_window_ms),
     ),
     // An unreadable backlog makes freshness_lag fire as if messages wait, so it is listed here.
     readSource("events_queue", ["freshness_lag"], () => readQueue(env.EVENTS_QUEUE, now)),
@@ -199,7 +216,7 @@ export async function runAlerts(
   ]);
 
   const unavailable: string[] = [];
-  for (const r of [health, rejected, quarantine, queue, dlq, sizes]) {
+  for (const r of [health, rejected, quarantine, postbacks, queue, dlq, sizes]) {
     if (r.failure === null) continue;
     unavailable.push(r.source);
     console.log(
@@ -218,6 +235,7 @@ export async function runAlerts(
     dlqBacklog: dlq.value?.backlog ?? null,
     rejectedNew: rejected.value,
     quarantineNew: quarantine.value,
+    postbacks: postbacks.value,
     sizes: sizes.value,
   };
   const firing = evaluateAlerts(readings, thresholds);
@@ -238,6 +256,18 @@ export async function runAlerts(
   if (sizes.value !== null) {
     writePoint(env.METRICS, d1SizePoint("facts", sizes.value.facts));
     writePoint(env.METRICS, d1SizePoint("events", sizes.value.events));
+  }
+
+  // After the evaluation, so a failed delete never hides a firing.
+  try {
+    await deletePostbackCountsBefore(env.FACTS, now - POSTBACK_COUNTS_KEEP_MS);
+  } catch (err) {
+    console.log(
+      JSON.stringify({
+        msg: "postback_counts_delete_failed",
+        name: err instanceof Error ? err.name : "unknown",
+      }),
+    );
   }
 
   // Last, so a run that throws looks at the same window again. A failed size read stays due.

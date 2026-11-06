@@ -147,6 +147,7 @@ export async function insertTestPartner(input: {
 export async function deleteTestPartner(id: string): Promise<void> {
   await env.FACTS.batch([
     env.FACTS.prepare("DELETE FROM quarantine WHERE partner_id = ?").bind(id),
+    env.FACTS.prepare("DELETE FROM postback_counts WHERE partner_id = ?").bind(id),
     env.FACTS.prepare("DELETE FROM partners WHERE id = ?").bind(id),
   ]);
 }

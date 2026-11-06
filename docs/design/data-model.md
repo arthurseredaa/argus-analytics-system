@@ -36,7 +36,7 @@ These points refine the ADRs. Where the wording differs, this file is the curren
 | `POST /api/events` | nothing | nothing | the one event in the body |
 | `POST /api/complete` | `conversions` joined with `clicks`, current `offers` | `users`, `user_answers` | `quiz_completed`, `offer_selected` (`completion`) |
 | `GET /go?prelander=&visit=` | `users`, `user_answers`, `conversions` joined with `clicks`, current `offers` | `clicks` when selection returns an offer | `offer_click` when a click is written |
-| `POST /postback/v1/{partner}` | `partners`, `clicks`, `offers` of the click's version | `conversions`, or `quarantine` | `lead` or `purchase` when accepted or duplicate |
+| `POST /postback/v1/{partner}` | `partners`, `clicks`, `offers` of the click's version | `conversions` or `quarantine`; and, after the answer, `postback_counts` when the partner was found | `lead` or `purchase` when accepted or duplicate |
 | Cleanup job, daily | `users`, `clicks`, `conversions` | deletes from `users`, `user_answers`, `clicks` | none |
 
 Entry for a user with a cookie reads the facts in one D1 batch. A cookie without a `users` row (a user who left before completion) finds nothing and gets the quiz. An existing user without any Lead also gets an empty quiz (Q-1, ADR 0004). A user whose Leads are all for disabled offers and whose answers are sufficient skips the quiz under rule 3 (OFF-9), so entry can redirect with reason `best_epu` or `fallback_universal` as well as `lead_return`.
@@ -254,6 +254,23 @@ CREATE TABLE quarantine (
 - `click_id` has no foreign key, because the row exists exactly when the referenced click does not. A quarantined postback is never matched to a user by anything other than the click ID, is not counted, and emits no event.
 - No unique key: a partner that redelivers an unknown-click postback adds a second row, which is harmless because nothing here is counted.
 - Read by an operator. If the click turns out to exist after all, the postback can be resent through the normal endpoint.
+
+### postback_counts
+
+```sql
+CREATE TABLE postback_counts (
+  minute     INTEGER NOT NULL,  -- Unix milliseconds, truncated to the minute
+  partner_id TEXT NOT NULL,
+  requests   INTEGER NOT NULL,
+  accepted   INTEGER NOT NULL,  -- accepted and duplicate outcomes
+  PRIMARY KEY (minute, partner_id)
+) WITHOUT ROWID;
+```
+
+- Put there for the `postbacks_without_conversions` alert (metrics-and-operations.md "Alerts"). One row per UTC minute and partner.
+- Written by the postback endpoint in `waitUntil`, after the answer is built, as an upsert that adds 1 to `requests` and 1 or 0 to `accepted`. Only a partner found in `partners` is counted, so random traffic cannot fill the table or fire the alert. `401` for a wrong signature, `400` and a quarantined postback count as requests only, so a wrong secret and a broken click lookup both show. A failed write logs `postback_count_failed` and never changes the answer.
+- Read by the alert run: sums per partner over the last 15 minutes. It deletes rows older than 24 hours after each evaluation.
+- Not personal data: partner ids and counts only.
 
 ### Cleanup and deletion
 
