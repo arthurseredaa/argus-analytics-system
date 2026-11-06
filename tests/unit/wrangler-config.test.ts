@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { eventsBucketName, readWranglerConfig } from "../../scripts/lib/wrangler-config.ts";
+import { METRICS_DATASET } from "../../src/db/analytics-engine.ts";
 import { retryDelaySeconds } from "../../src/events/consumer.ts";
 import { LOADER_CRON } from "../../src/events/loader.ts";
 import { ALERT_CRON, parseThresholds } from "../../src/ops/alerts.ts";
@@ -58,5 +59,10 @@ describe("wrangler.jsonc", () => {
     const producers = config.queues?.producers ?? [];
     expect(producers.find((p) => p.binding === "EVENTS_DLQ")?.queue).toBe("events-dlq");
     expect(config.queues?.consumers?.some((c) => c.queue === "events-dlq")).toBe(false);
+  });
+
+  it("NFR-6 the SQL queries read the dataset the Worker binds", () => {
+    const metrics = config.analytics_engine_datasets?.find((d) => d.binding === "METRICS");
+    expect(METRICS_DATASET).toBe(metrics?.dataset);
   });
 });

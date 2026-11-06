@@ -5,6 +5,7 @@ import {
   type AlertReadings,
   type AlertThresholds,
 } from "../../src/ops/alerts.ts";
+import type { SqlSignals } from "../../src/db/analytics-engine.ts";
 import type { PipelineHealth } from "../../src/events/health.ts";
 
 // The values of ALERT_THRESHOLDS in wrangler.jsonc; a wrangler-config test pins that file.
@@ -45,6 +46,7 @@ function readings(overrides: Partial<AlertReadings> = {}): AlertReadings {
     quarantineNew: 0,
     postbacks: [],
     sizes: null,
+    sql: null,
     ...overrides,
   };
 }
@@ -140,6 +142,50 @@ describe("evaluateAlerts", () => {
     const at = readings({ sizes: { facts: 7_000_000_000, events: 7_000_000_000 } });
     expect(ids(at)).toEqual([]);
     expect(ids(readings({ sizes: null }))).toEqual([]);
+  });
+});
+
+function sqlSignals(overrides: Partial<SqlSignals> = {}): SqlSignals {
+  return {
+    selectionP95: [],
+    worker5xx: { errors: 0, requests: 0 },
+    d1Overload: 0,
+    ...overrides,
+  };
+}
+
+describe("evaluateAlerts, Analytics Engine SQL readings", () => {
+  it("NFR-6 selection_p95 fires per endpoint above 300 ms", () => {
+    const over = readings({
+      sql: sqlSignals({
+        selectionP95: [
+          { endpoint: "GET /go", p95_ms: 300.1, requests: 50 },
+          { endpoint: "POST /api/complete", p95_ms: 300, requests: 50 },
+        ],
+      }),
+    });
+    expect(evaluateAlerts(over, T)).toEqual([
+      { id: "selection_p95", value: 300.1, threshold: 300, endpoint: "GET /go" },
+    ]);
+    expect(ids(readings({ sql: null }))).toEqual([]);
+  });
+
+  it("NFR-6 worker_5xx_rate fires above 1% of requests", () => {
+    const two = readings({ sql: sqlSignals({ worker5xx: { errors: 2, requests: 100 } }) });
+    expect(evaluateAlerts(two, T)).toEqual([
+      { id: "worker_5xx_rate", value: 0.02, threshold: 0.01 },
+    ]);
+    const one = readings({ sql: sqlSignals({ worker5xx: { errors: 1, requests: 100 } }) });
+    expect(ids(one)).toEqual([]);
+    const none = readings({ sql: sqlSignals({ worker5xx: { errors: 0, requests: 0 } }) });
+    expect(ids(none)).toEqual([]);
+  });
+
+  it("NFR-6 d1_overload_errors fires above 10 in an hour", () => {
+    expect(evaluateAlerts(readings({ sql: sqlSignals({ d1Overload: 11 }) }), T)).toEqual([
+      { id: "d1_overload_errors", value: 11, threshold: 10 },
+    ]);
+    expect(ids(readings({ sql: sqlSignals({ d1Overload: 10 }) }))).toEqual([]);
   });
 });
 

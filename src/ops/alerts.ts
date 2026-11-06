@@ -3,6 +3,13 @@
 // An alert is a rule over `AlertReadings`. A reading that is `null` is unknown or not due, and an unknown reading never fires.
 import { z } from "zod";
 import { countQuarantineBetween, databaseSize } from "../db/ops.ts";
+import {
+  AnalyticsSqlError,
+  analyticsSql,
+  readSqlSignals,
+  type AnalyticsSql,
+  type SqlSignals,
+} from "../db/analytics-engine.ts";
 import { deletePostbackCountsBefore, postbackCountsSince } from "../db/postback-counts.ts";
 import { ALERT_STATE_KEY, REJECTED_PREFIX, listKeys } from "../events/files.ts";
 import { readHealth, type PipelineHealth } from "../events/health.ts";
@@ -62,6 +69,7 @@ export type AlertReadings = {
   quarantineNew: number | null;
   postbacks: { partner_id: string; requests: number; accepted: number }[] | null;
   sizes: { facts: number; events: number } | null;
+  sql: SqlSignals | null;
 };
 
 export type AlertFiring = {
@@ -85,7 +93,7 @@ const freshnessLag: Rule = ({ health, queueBacklog }, t) => {
   return waiting ? above("freshness_lag", health.freshness_ms, t.freshness_lag_ms) : [];
 };
 
-// Tasks 3 and 4 append their rules here. The order is the order of the log lines.
+// The order is the order of the log lines.
 const RULES: Rule[] = [
   freshnessLag,
   ({ health }, t) =>
@@ -107,6 +115,31 @@ const RULES: Rule[] = [
       })),
   ({ sizes }, t) => above("d1_facts_size", sizes?.facts ?? null, t.d1_facts_size_bytes),
   ({ sizes }, t) => above("d1_events_size", sizes?.events ?? null, t.d1_events_size_bytes),
+  // Per endpoint, from the Analytics Engine SQL API.
+  ({ sql }, t) =>
+    (sql?.selectionP95 ?? [])
+      .filter((e) => e.p95_ms > t.selection_p95_ms)
+      .map((e) => ({
+        id: "selection_p95" as const,
+        value: e.p95_ms,
+        threshold: t.selection_p95_ms,
+        endpoint: e.endpoint,
+      })),
+  // No requests in the window is no rate, so no line.
+  ({ sql }, t) =>
+    sql !== null &&
+    sql.worker5xx.requests > 0 &&
+    sql.worker5xx.errors / sql.worker5xx.requests > t.worker_5xx_rate
+      ? [
+          {
+            id: "worker_5xx_rate" as const,
+            value: sql.worker5xx.errors / sql.worker5xx.requests,
+            threshold: t.worker_5xx_rate,
+          },
+        ]
+      : [],
+  ({ sql }, t) =>
+    above("d1_overload_errors", sql?.d1Overload ?? null, t.d1_overload_errors_per_hour),
 ];
 
 export function evaluateAlerts(readings: AlertReadings, t: AlertThresholds): AlertFiring[] {
@@ -122,7 +155,21 @@ export type AlertEnv = Pick<
   | "EVENTS_DLQ"
   | "METRICS"
   | "ALERT_THRESHOLDS"
+  | "AE_SQL_TOKEN"
+  | "CF_ACCOUNT_ID"
 >;
+
+// The alerts that need the Analytics Engine SQL API (decision 16).
+const SQL_ALERTS: AlertId[] = ["selection_p95", "worker_5xx_rate", "d1_overload_errors"];
+
+// Without both secrets (missing or empty) the SQL alerts are not evaluated.
+function sqlClient(env: AlertEnv): AnalyticsSql | null {
+  const token = env.AE_SQL_TOKEN;
+  const accountId = env.CF_ACCOUNT_ID;
+  if (token === undefined || token === "" || accountId === undefined || accountId === "")
+    return null;
+  return analyticsSql({ accountId, token });
+}
 
 async function readState(bucket: R2Bucket): Promise<AlertState | null> {
   try {
@@ -137,7 +184,10 @@ async function readState(bucket: R2Bucket): Promise<AlertState | null> {
   }
 }
 
-type Reading<T> = { source: string; alerts: AlertId[]; value: T | null; failure: string | null };
+// `failure` holds the fields of the `alert_source_unavailable` line that say why: an error class `name`
+// and, for the SQL API, the HTTP `status`; or a `reason`. It never holds a message.
+type Failure = { name?: string; status?: number; reason?: string };
+type Reading<T> = { source: string; alerts: AlertId[]; value: T | null; failure: Failure | null };
 
 // One source of readings. A failure is kept for logging and the other sources still answer.
 async function readSource<T>(
@@ -149,7 +199,10 @@ async function readSource<T>(
   try {
     return { source, alerts, value: await read(), failure: null };
   } catch (err) {
-    return { source, alerts, value: null, failure: err instanceof Error ? err.name : "unknown" };
+    const name = err instanceof Error ? err.name : "unknown";
+    const failure: Failure =
+      err instanceof AnalyticsSqlError ? { name, status: err.status } : { name };
+    return { source, alerts, value: null, failure };
   }
 }
 
@@ -170,9 +223,11 @@ async function countRejectedBetween(bucket: R2Bucket, after: number, upTo: numbe
   return keys.filter((k) => k.uploaded > after && k.uploaded <= upTo).length;
 }
 
+// `deps.sql` replaces the Analytics Engine client in tests; `null` stands for no token.
 export async function runAlerts(
   env: AlertEnv,
   now: number,
+  deps: { sql?: AnalyticsSql | null } = {},
 ): Promise<{ firing: AlertFiring[]; unavailable: string[] }> {
   const thresholds = parseThresholds(env.ALERT_THRESHOLDS);
   if (thresholds === null) {
@@ -184,7 +239,8 @@ export async function runAlerts(
   const after = state?.checked_at ?? now - LOOK_BACK_MS;
   const sizesDue = state === null || now - state.sizes_checked_at >= SIZE_CHECK_EVERY_MS;
 
-  const [health, rejected, quarantine, postbacks, queue, dlq, sizes] = await Promise.all([
+  const sqlSource = deps.sql === undefined ? sqlClient(env) : deps.sql;
+  const [health, rejected, quarantine, postbacks, queue, dlq, sizes, sql] = await Promise.all([
     readSource("pipeline_health", ["freshness_lag", "pending_oldest_file"], () =>
       readHealth(env, now),
     ),
@@ -213,10 +269,18 @@ export async function runAlerts(
           }
         : null,
     ),
+    sqlSource === null
+      ? ({
+          source: "analytics_engine_sql",
+          alerts: SQL_ALERTS,
+          value: null,
+          failure: { reason: "no_token" },
+        } satisfies Reading<SqlSignals>)
+      : readSource("analytics_engine_sql", SQL_ALERTS, () => readSqlSignals(sqlSource)),
   ]);
 
   const unavailable: string[] = [];
-  for (const r of [health, rejected, quarantine, postbacks, queue, dlq, sizes]) {
+  for (const r of [health, rejected, quarantine, postbacks, queue, dlq, sizes, sql]) {
     if (r.failure === null) continue;
     unavailable.push(r.source);
     console.log(
@@ -224,7 +288,7 @@ export async function runAlerts(
         msg: "alert_source_unavailable",
         source: r.source,
         alerts: r.alerts,
-        name: r.failure,
+        ...r.failure,
       }),
     );
   }
@@ -237,6 +301,7 @@ export async function runAlerts(
     quarantineNew: quarantine.value,
     postbacks: postbacks.value,
     sizes: sizes.value,
+    sql: sql.value,
   };
   const firing = evaluateAlerts(readings, thresholds);
   for (const f of firing) console.log(JSON.stringify({ msg: "alert", ...f }));

@@ -5,10 +5,15 @@ declare namespace Cloudflare {
   interface Env {
     MASTER_KEY: string;
     EMAIL_HASH_KEY: string;
+    // The Analytics Engine SQL alerts; without them the alert run logs alert_source_unavailable.
+    AE_SQL_TOKEN?: string;
+    CF_ACCOUNT_ID?: string;
   }
 }
 
 interface Env {
   MASTER_KEY: string;
   EMAIL_HASH_KEY: string;
+  AE_SQL_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
 }

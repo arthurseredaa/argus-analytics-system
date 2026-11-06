@@ -7,5 +7,9 @@ EMAIL_HASH_KEY=
 PARTNER_SECRET_PARTNERA=
 # openssl rand -base64 32
 PARTNER_SECRET_PARTNERB=
+# Optional. Without them the SQL alerts (selection_p95, worker_5xx_rate, d1_overload_errors)
+# log alert_source_unavailable and the other alerts still run.
+# AE_SQL_TOKEN=
+# CF_ACCOUNT_ID=
 TEST_ROUTES=on
 GIT_SHA=dev

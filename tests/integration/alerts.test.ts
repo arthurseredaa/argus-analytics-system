@@ -2,6 +2,13 @@ import { createScheduledController, env } from "cloudflare:test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { storedEvent } from "../fixtures/events.ts";
 import worker from "../../src/index.ts";
+import {
+  AnalyticsSqlError,
+  D1_OVERLOAD_SQL,
+  SELECTION_P95_SQL,
+  WORKER_5XX_SQL,
+  type AnalyticsSql,
+} from "../../src/db/analytics-engine.ts";
 import { ALERT_CRON, runAlerts } from "../../src/ops/alerts.ts";
 import {
   alertLines,
@@ -32,6 +39,21 @@ function alertEnv(rec: ReturnType<typeof recordingDataset>, override: Partial<En
     ...override,
   };
 }
+
+// Quiet Analytics Engine answers, for the cases that are not about the SQL alerts.
+const quietSql = { sql: (async () => []) as AnalyticsSql };
+
+const failingSql: AnalyticsSql = async () => {
+  throw new AnalyticsSqlError(500);
+};
+
+// Readings above all three thresholds.
+const highSql: AnalyticsSql = async (query) => {
+  if (query === SELECTION_P95_SQL) return [{ endpoint: "GET /go", p95_ms: "450", requests: "80" }];
+  if (query === WORKER_5XX_SQL) return [{ errors: "3", requests: "100" }];
+  if (query === D1_OVERLOAD_SQL) return [{ errors: "12" }];
+  return [];
+};
 
 const pointsOf = (rec: ReturnType<typeof recordingDataset>, kind: string) =>
   rec.points.filter((p) => p.indexes?.[0] === kind);
@@ -135,6 +157,7 @@ describe("alert run", () => {
     await runAlerts(
       alertEnv(recordingDataset(), { EVENTS_DLQ: queueWithoutMetrics() }),
       Date.now() + 61 * 60_000,
+      quietSql,
     );
 
     const unavailable = logLines(log, "alert_source_unavailable");
@@ -219,5 +242,83 @@ describe("alert run", () => {
     await worker.scheduled(createScheduledController({ cron: ALERT_CRON }), alertEnv(rec));
 
     expect(logLines(log, "alert_run")).toHaveLength(1);
+  });
+
+  it("NFR-6 without the token the SQL alerts log one alert_source_unavailable line", async () => {
+    const log = vi.spyOn(console, "log");
+    await putPending([storedEvent()]);
+
+    await runAlerts(alertEnv(recordingDataset()), Date.now() + 61 * 60_000);
+
+    const lines = logLines(log, "alert_source_unavailable").filter(
+      (l) => l["source"] === "analytics_engine_sql",
+    );
+    expect(lines).toEqual([
+      {
+        msg: "alert_source_unavailable",
+        source: "analytics_engine_sql",
+        reason: "no_token",
+        alerts: ["selection_p95", "worker_5xx_rate", "d1_overload_errors"],
+      },
+    ]);
+    expect(logLines(log, "alert_run")[0]?.["unavailable"]).toContain("analytics_engine_sql");
+    expect(alertLines(log).some((l) => l["id"] === "pending_oldest_file")).toBe(true);
+  });
+
+  it("NFR-6 a failing SQL API logs alert_source_unavailable with the status", async () => {
+    const log = vi.spyOn(console, "log");
+    await runAlerts(alertEnv(recordingDataset()), Date.now(), { sql: failingSql });
+
+    const lines = logLines(log, "alert_source_unavailable");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      source: "analytics_engine_sql",
+      status: 500,
+      alerts: ["selection_p95", "worker_5xx_rate", "d1_overload_errors"],
+    });
+    expect(lines[0]).not.toHaveProperty("reason");
+  });
+
+  it("NFR-6 SQL readings above the thresholds fire their alerts", async () => {
+    const log = vi.spyOn(console, "log");
+    await runAlerts(alertEnv(recordingDataset()), Date.now(), { sql: highSql });
+
+    const fired = alertLines(log).filter((l) =>
+      ["selection_p95", "worker_5xx_rate", "d1_overload_errors"].includes(String(l["id"])),
+    );
+    expect(fired).toEqual([
+      { msg: "alert", id: "selection_p95", value: 450, threshold: 300, endpoint: "GET /go" },
+      { msg: "alert", id: "worker_5xx_rate", value: 0.03, threshold: 0.01 },
+      { msg: "alert", id: "d1_overload_errors", value: 12, threshold: 10 },
+    ]);
+  });
+
+  it("R-12 the SQL token never appears in a log line", async () => {
+    const log = vi.spyOn(console, "log");
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(JSON.stringify({ errors: [{ message: "bad tok-secret-test" }] }), {
+          status: 401,
+        }),
+    );
+
+    try {
+      await runAlerts(
+        alertEnv(recordingDataset(), {
+          AE_SQL_TOKEN: "tok-secret-test",
+          CF_ACCOUNT_ID: "acc-test",
+        }),
+        Date.now(),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    const failed = logLines(log, "alert_source_unavailable").find(
+      (l) => l["source"] === "analytics_engine_sql",
+    );
+    expect(failed?.["status"]).toBe(401);
+    expect(log.mock.calls.some((args) => String(args[0]).includes("tok-secret-test"))).toBe(false);
   });
 });
