@@ -111,3 +111,19 @@ Arthur changed how the remaining stages run, to finish them faster and to review
 The stage 4 plan also settled four report questions the design left open, each from a default in `metrics-and-operations.md`. A click whose user was deleted counts as its own user. Only the first Lead of a user and offer pair counts, and later Leads add only their payout (Q-23). A Purchase counts as "without a Lead" (M-15) when no Lead was accepted at or before it. Visitors (M-2) and transitions (M-11) are in the MVP report, because M-28 and the demo numbers need them. The demo script gained three `step_viewed` lines, without which the report would show `started` 0 after a full visit.
 
 No stage was added or moved.
+
+## 2026-11-06: the loader replaces the consumer's D1 write
+
+Stage 5 moved the D1 write out of the Queue consumer, as ADR 0005 and ADR 0006 planned. The consumer now writes each batch as one NDJSON file to R2 `pending/` and acknowledges it. It no longer validates rows. A loader cron runs every minute and moves those files into the D1 `events` table. The stage plan settled these points:
+
+- A loader run takes at most 8 batches of 900 rows, so 7,200 rows, while ADR 0006 says 9,000 files. The cap comes from D1's limit of 1,000 queries per Worker invocation.
+- A failed insert counts as a load attempt only while D1 still answers `SELECT 1`, so an outage never sends a batch to `rejected/`. A D1 that answers but refuses writes would still count. This is recorded as a known limit.
+- Quiz completion and `/go` keep sending their server events in the background and never answer `503`, as the stage 2 plan settled. `data-model.md` and `metrics-and-operations.md` said otherwise and were corrected.
+- `/__test/reset` leaves R2 alone.
+- The demo script and the browser test wait up to 150 seconds for the Queue batch and the next loader minute. The demo also has a paused mode for the loader-paused drill.
+
+The drill numbers and the Outcome sections of ADR 0005 and ADR 0006 follow in a separate small PR, because the drill runs against the deployed Worker after this stage merges.
+
+On 2026-11-06 Arthur also kept stages 6 to 9 in scope after the AI proposed cutting them to save the weekly model quota. The time estimates in this plan are human hours, and the agents need less. A Fable review of how accurately the stages were implemented runs after the last stage, then the project explainer.
+
+No stage was added or moved.

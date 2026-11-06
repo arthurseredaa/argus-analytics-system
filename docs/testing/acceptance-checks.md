@@ -95,7 +95,7 @@ Expected: step 2 answers 202 and the state has no user row and no answers: a ste
 
 Depends on: QZ-1.
 
-Automated: `pnpm test -- -t "QZ-2"`. Cases: `QZ-2 wording after women`, `QZ-2 wording after men`, `QZ-2 accepts asia, europe and latam`, `QZ-2 rejects africa`.
+Automated: `pnpm test -t "QZ-2"`. Cases: `QZ-2 wording after women`, `QZ-2 wording after men`, `QZ-2 accepts asia, europe and latam`, `QZ-2 rejects africa`.
 
 Manual:
 1. In a fresh browser profile, answer women at step 1 and read the step 2 question. Repeat with men.
@@ -107,7 +107,7 @@ Expected: the two step 2 questions differ in wording and offer the same three va
 
 Depends on: OFF-5, PB-1.
 
-Automated: `pnpm test -- -t "QZ-3"`. Cases: `QZ-3 same answers with different emails give the same offer`, `QZ-3 row 26 email creates no Lead`.
+Automated: `pnpm test -t "QZ-3"`. Cases: `QZ-3 same answers with different emails give the same offer`, `QZ-3 row 26 email creates no Lead`.
 
 Manual:
 1. Jar `user1.jar`: `complete $TMP/user1.jar women asia user1@example.com`.
@@ -133,7 +133,7 @@ Expected: after step 2 both answer events are kept and D1 has no answers, becaus
 
 Depends on: data model.
 
-Automated: `pnpm test -- -t "QZ-5"`. Cases: `QZ-5 reload before completion starts from step 1`, `QZ-5 entry after completion without a Lead shows an empty quiz (Q-1)`.
+Automated: `pnpm test -t "QZ-5"`. Cases: `QZ-5 reload before completion starts from step 1`, `QZ-5 entry after completion without a Lead shows an empty quiz (Q-1)`.
 
 Manual:
 1. `grep -rni "current_step" migrations/ src/` prints nothing.
@@ -165,7 +165,7 @@ Expected: one page load, three steps, one `POST /api/complete` request after the
 
 Depends on: ADR 0002, ADR 0005.
 
-Automated: `pnpm test -- -t "ID-1"`. Cases: `ID-1 first visit sets a user id cookie and writes no D1 row`, `ID-1 complete creates the users row`, `ID-1 every stored event has a unique event id`, `ID-1 event without event id is rejected`.
+Automated: `pnpm test -t "ID-1"`. Cases: `ID-1 first visit sets a user id cookie and writes no D1 row`, `ID-1 complete creates the users row`, `ID-1 every stored event has a unique event id`, `ID-1 event without event id is rejected`.
 
 Manual:
 1. `curl -s -c $JAR -o /dev/null $BASE/p/demo`, then `state $JAR`.
@@ -178,7 +178,7 @@ Expected: after step 1 the state shows the cookie's `user_id` and no users row. 
 
 Depends on: ADR 0002.
 
-Automated: `pnpm test -- -t "ID-2"`. Cases: `ID-2 second visit with the same cookie keeps the user id`, `ID-2 R-1 visit without the cookie creates a new user`, `ID-2 malformed cookie value is replaced`, `ID-2 user id in the event body is ignored`.
+Automated: `pnpm test -t "ID-2"`. Cases: `ID-2 second visit with the same cookie keeps the user id`, `ID-2 R-1 visit without the cookie creates a new user`, `ID-2 malformed cookie value is replaced`, `ID-2 user id in the event body is ignored`.
 
 Manual:
 1. `curl -s -c $JAR -b $JAR -D - -o /dev/null $BASE/p/demo` twice.
@@ -191,7 +191,7 @@ Expected: steps 1 give the same cookie `user_id` in `state`, step 2 a different 
 
 Depends on: ID-2, PB-4, OFF-3.
 
-Automated: `pnpm test -- -t "ID-3"`. Case: `ID-3 earlier user's email in a new browser gives no lead return`.
+Automated: `pnpm test -t "ID-3"`. Case: `ID-3 earlier user's email in a new browser gives no lead return`.
 
 Manual:
 1. User A (`a.jar`): `complete a.jar women asia user1@example.com` (003), `GET $BASE/go?prelander=demo`, then `pnpm postback lead --click <A's click id> --txn T-A1`.
@@ -203,7 +203,7 @@ Expected: B gets 004 with reason `best_epu`. B's entry answers 200 with the quiz
 
 Depends on: ID-1, QZ-1 to QZ-3.
 
-Automated: `pnpm test -- -t "ID-4"`. Case: `ID-4 quiz run stores properties and the visit events`.
+Automated: `pnpm test -t "ID-4"`. Case: `ID-4 quiz run stores properties and the visit events`.
 
 Manual: run one full quiz to a transition, then `state $JAR`.
 
@@ -213,7 +213,7 @@ Expected: properties show both answers and an email reference (not the email its
 
 ### OFF-1 The synthetic catalog of 7 offers is seeded, all active
 
-Automated: `pnpm test -- -t "OFF-1"`. Case: `OFF-1 seed equals the spec catalog`.
+Automated: `pnpm test -t "OFF-1"`. Case: `OFF-1 seed equals the spec catalog`.
 
 Manual: `state` shows the catalog, or `pnpm offer list`.
 
@@ -223,7 +223,7 @@ Expected: 7 offers, values equal to the catalog table in offer-selection.md, all
 
 Depends on: ADR 0003.
 
-Automated: `pnpm test -- -t "OFF-2"`. Case: `OFF-2 EPU change takes effect without deploy`.
+Automated: `pnpm test -t "OFF-2"`. Case: `OFF-2 EPU change takes effect without deploy`.
 
 Manual:
 1. `grep -rnE "0\.(95|80|65|70|60|50)|1\.10" src/` prints nothing outside seed data.
@@ -236,7 +236,7 @@ Expected: no EPU in code. Row 14 gives 001 on the EPU tie, with no deploy in bet
 
 Depends on: PB-4, ADR 0004.
 
-Automated: `pnpm test -- -t "OFF-3"`. Cases: decision table rows 16, 17, 27.
+Automated: `pnpm test -t "OFF-3"`. Cases: decision table rows 16, 17, 27.
 
 Manual:
 1. `POST /__test/seed` with a user who answered women + asia and has a Lead on 001. Put the cookie it returns into `$JAR`.
@@ -248,7 +248,7 @@ Expected: `302` with a `Location` on `https://asia-women.example`, even though 0
 
 Depends on: ADR 0004 (Q-10).
 
-Automated: `pnpm test -- -t "OFF-4"`. Cases: decision table rows 22 and 23.
+Automated: `pnpm test -t "OFF-4"`. Cases: decision table rows 22 and 23.
 
 Manual: Leads on 001 then 004 for one user, enter the prelander. Disable 004 and enter again.
 
@@ -256,7 +256,7 @@ Expected: first entry goes to 004 (most recent Lead, the current default). After
 
 ### OFF-5 Highest EPU among matching active specialised offers, ties to the lowest ID
 
-Automated: `pnpm test -- -t "OFF-5"`. Cases: decision table rows 1, 2, 3, 4, 6, 10, 11, 12, 14, 29.
+Automated: `pnpm test -t "OFF-5"`. Cases: decision table rows 1, 2, 3, 4, 6, 10, 11, 12, 14, 29.
 
 Manual: for each of women+asia, men+asia, women+europe, men+europe, men+latam run `complete` in a fresh jar (for example `complete $JAR women asia user1@example.com`).
 
@@ -264,7 +264,7 @@ Expected: 003, 003, 004, 005, 006, each with reason `best_epu`.
 
 ### OFF-6 Fallback to the universal offer
 
-Automated: `pnpm test -- -t "OFF-6"`. Cases: decision table rows 5, 7, 8, 13, plus `OFF-6 incomplete offer row is excluded and reported`.
+Automated: `pnpm test -t "OFF-6"`. Cases: decision table rows 5, 7, 8, 13, plus `OFF-6 incomplete offer row is excluded and reported`.
 
 Manual:
 1. `complete` with women + latam.
@@ -274,7 +274,7 @@ Expected: both give 007 with reason `fallback_universal`. An offer row without a
 
 ### OFF-7 The universal offer does not compete on EPU
 
-Automated: `pnpm test -- -t "OFF-7"`. Case: decision table row 15.
+Automated: `pnpm test -t "OFF-7"`. Case: decision table row 15.
 
 Manual: `pnpm offer set-epu 007 5.00`, `complete` with women + asia. Restore with `0.50`.
 
@@ -282,7 +282,7 @@ Expected: 003 with reason `best_epu`.
 
 ### OFF-8 No offer available
 
-Automated: `pnpm test -- -t "OFF-8"`. Cases: decision table rows 9 and 21. UI case: `OFF-8 page shows the no-offer text`.
+Automated: `pnpm test -t "OFF-8"`. Cases: decision table rows 9 and 21. UI case: `OFF-8 page shows the no-offer text`.
 
 Manual: `pnpm offer set-status 007 inactive`, women + latam in the browser. Restore 007.
 
@@ -292,7 +292,7 @@ Expected: `POST /api/complete` returns reason `no_offer` and no URL. The page sh
 
 Depends on: OFF-3.
 
-Automated: `pnpm test -- -t "OFF-9"`. Cases: decision table rows 18, 19, 20, 21, 28.
+Automated: `pnpm test -t "OFF-9"`. Cases: decision table rows 18, 19, 20, 21, 28.
 
 Manual:
 1. User with women + asia and a Lead on 001. `pnpm offer set-status 001 inactive`.
@@ -303,7 +303,7 @@ Expected: step 2 gives `302` to `https://asia-connect.example` with reason `best
 
 ### OFF-10 Selection runs on the server and the demo shows name and URL
 
-Automated: `pnpm test -- -t "OFF-10"`. Case: `OFF-10 complete returns name and url of the chosen offer`.
+Automated: `pnpm test -t "OFF-10"`. Case: `OFF-10 complete returns name and url of the chosen offer`.
 
 Manual:
 1. `complete $JAR women asia user1@example.com | jq`.
@@ -315,7 +315,7 @@ Expected: the response has `name` and `url` of one offer and nothing about the o
 
 Depends on: ADR 0004, R-9.
 
-Automated: `pnpm test -- -t "OFF-11"`. Cases: `OFF-11 transition answers 302 with Location and click id`, `OFF-11 click row exists before the 302`, `OFF-11 R-9 offer disabled after selection is re-selected at /go`, `OFF-11 the URL cannot choose the offer`, `OFF-11 a double press makes two clicks`, `OFF-11 HEAD and an unknown prelander write nothing`.
+Automated: `pnpm test -t "OFF-11"`. Cases: `OFF-11 transition answers 302 with Location and click id`, `OFF-11 click row exists before the 302`, `OFF-11 R-9 offer disabled after selection is re-selected at /go`, `OFF-11 the URL cannot choose the offer`, `OFF-11 a double press makes two clicks`, `OFF-11 HEAD and an unknown prelander write nothing`.
 
 Manual:
 1. `complete` with women + asia, then `curl -s -b $JAR -o /dev/null -w '%{http_code} %{redirect_url}\n' "$BASE/go?prelander=demo"`.
@@ -325,7 +325,7 @@ Expected: step 1 prints `302 https://asia-connect.example/?click_id=<random id>`
 
 ### OFF-12 The spec's worked examples hold
 
-Automated: `pnpm test -- -t "OFF-12"`. Cases: decision table rows 1, 3, 5, 6, 7, 8, 16.
+Automated: `pnpm test -t "OFF-12"`. Cases: decision table rows 1, 3, 5, 6, 7, 8, 16.
 
 Manual: run the seven rows by hand with the steps from OFF-5, OFF-6 and OFF-3.
 
@@ -337,7 +337,7 @@ Expected: 003, 004, 007, 006, 007, 007, and 001 with the quiz skipped.
 
 Depends on: ADR 0007.
 
-Automated: `pnpm test -- -t "PB-1"`. Cases: `PB-1 signed lead is accepted`, `PB-1 signed purchase is accepted`, `PB-1 unknown type is rejected`.
+Automated: `pnpm test -t "PB-1"`. Cases: `PB-1 signed lead is accepted`, `PB-1 signed purchase is accepted`, `PB-1 unknown type is rejected`.
 
 Manual: after a transition, `pnpm postback lead --click $CLICK --txn T1`, then `pnpm postback purchase --click $CLICK --txn P1`.
 
@@ -347,7 +347,7 @@ Expected: both answer 202. `state` shows one Lead and one Purchase for the user 
 
 Depends on: ADR 0007.
 
-Automated: `pnpm test -- -t "PB-2"`. Cases: one per required field missing, `PB-2 optional payout and currency accepted`, `PB-2 unknown extra field ignored`, `PB-2 version is in the path`.
+Automated: `pnpm test -t "PB-2"`. Cases: one per required field missing, `PB-2 optional payout and currency accepted`, `PB-2 unknown extra field ignored`, `PB-2 version is in the path`.
 
 Manual: compare the contract section of the design with the request validation in the code, field by field. `curl` a valid body to `/postback/v2/test`.
 
@@ -357,7 +357,7 @@ Expected: every required field in the design is validated, and nothing else is r
 
 Depends on: ADR 0007.
 
-Automated: `pnpm test -- -t "PB-3"`. Cases: `PB-3 R-11 no signature gives 401`, `PB-3 R-11 wrong signature gives 401`, `PB-3 R-11 stale timestamp gives 401`, `PB-3 R-11 signature from another partner gives 401`, each asserting the state is unchanged.
+Automated: `pnpm test -t "PB-3"`. Cases: `PB-3 R-11 no signature gives 401`, `PB-3 R-11 wrong signature gives 401`, `PB-3 R-11 stale timestamp gives 401`, `PB-3 R-11 signature from another partner gives 401`, each asserting the state is unchanged.
 
 Manual:
 1. `snap $TMP/before.json`.
@@ -370,7 +370,7 @@ Expected: three 401 responses and an empty diff.
 
 Depends on: ADR 0007, R-6, Q-11, Q-24.
 
-Automated: `pnpm test -- -t "PB-4"`. Cases: `PB-4 lead lands on the click's user and offer`, `PB-4 Q-11 unknown click is quarantined with 202`, `PB-4 R-6 quarantined postback matches once the click exists`, `PB-4 Q-24 offer mismatch is rejected`, `PB-4 Q-24 lead on a disabled offer is counted without a redirect right`.
+Automated: `pnpm test -t "PB-4"`. Cases: `PB-4 lead lands on the click's user and offer`, `PB-4 Q-11 unknown click is quarantined with 202`, `PB-4 R-6 quarantined postback matches once the click exists`, `PB-4 Q-24 offer mismatch is rejected`, `PB-4 Q-24 lead on a disabled offer is counted without a redirect right`.
 
 Manual:
 1. Two users with transitions to different offers. Send a Lead for user A's click.
@@ -382,7 +382,7 @@ Expected: step 1 gives a Lead to A on A's offer and nothing to B. Step 2 answers
 
 Depends on: ADR 0007, P-4.
 
-Automated: `pnpm test -- -t "PB-5"`. Cases: `PB-5 R-4 same postback twice counts once`, `PB-5 two purchases with different transaction ids count twice`, `PB-5 Q-23 second lead for the same user and offer is stored`, `PB-5 R-5 missing transaction id is handled as the design says`. The test checks that the second Lead is stored; counting it once is the report's rule, built in stage 4.
+Automated: `pnpm test -t "PB-5"`. Cases: `PB-5 R-4 same postback twice counts once`, `PB-5 two purchases with different transaction ids count twice`, `PB-5 Q-23 second lead for the same user and offer is stored`, `PB-5 R-5 missing transaction id is handled as the design says`. The test checks that the second Lead is stored; counting it once is the report's rule, built in stage 4.
 
 Manual:
 1. Send the same signed Purchase (`--txn P1`) twice. Read the report.
@@ -392,7 +392,7 @@ Expected: purchases are 1 after step 1 and 2 after step 2. The second identical 
 
 ### PB-6 A quiz email is not a Lead
 
-Automated: `pnpm test -- -t "PB-6"`. Case: decision table row 26.
+Automated: `pnpm test -t "PB-6"`. Case: decision table row 26.
 
 Manual: complete the quiz with an email, `state $JAR`, then enter the prelander again.
 
@@ -400,7 +400,7 @@ Expected: no Lead and no lead return. The entry shows the quiz (Q-1 default).
 
 ### PB-7 Test requests can be sent without a partner
 
-Automated: `pnpm test -- -t "PB-7"`. Case: `PB-7 helper produces a signature the endpoint accepts`.
+Automated: `pnpm test -t "PB-7"`. Case: `PB-7 helper produces a signature the endpoint accepts`.
 
 Manual: from a fresh clone, follow the README section on test postbacks word for word.
 
@@ -410,7 +410,7 @@ Expected: the commands work as written and print 202. No separate simulator serv
 
 Depends on: PB-3.
 
-Automated: `pnpm test -- -t "PB-8"`. Cases: invalid JSON, wrong content type, body over the size limit, unknown type, negative payout, unknown partner. Each test compares a state snapshot before and after.
+Automated: `pnpm test -t "PB-8"`. Cases: invalid JSON, wrong content type, body over the size limit, unknown type, negative payout, unknown partner. Each test compares a state snapshot before and after.
 
 Manual: `snap` before, send each malformed request with a valid signature, `snap` after, `diff`.
 
@@ -422,7 +422,7 @@ Expected: every request answers 400 or 401 and the diff is empty.
 
 Depends on: `docs/design/metrics-and-operations.md`.
 
-Automated: `pnpm test -- -t "AN-1"`. Case: `AN-1 fixture gives expected start, steps, drop-offs, transitions, Leads, Purchases`.
+Automated: `pnpm test -t "AN-1"`. Case: `AN-1 fixture gives expected start, steps, drop-offs, transitions, Leads, Purchases`.
 
 Manual: reset, run three users (funnel counts come from events, so a user who stops before the email step still counts at the steps reached): one stops after step 1, one stops after step 3, one reaches a Lead and a Purchase. `curl -s "$BASE/api/report" | jq`.
 
@@ -430,7 +430,7 @@ Expected: started 3, step 1 3, step 2 2, step 3 2, transitions 1, Lead 1, Purcha
 
 ### AN-2 Breakdown by prelander, offer and period
 
-Automated: `pnpm test -- -t "AN-2"`. Case: `AN-2 breakdowns sum to the total`.
+Automated: `pnpm test -t "AN-2"`. Case: `AN-2 breakdowns sum to the total`.
 
 Manual: reset, then run one user to offer 003 (women and asia) and one to offer 004 (women and europe) on `/p/demo`. The catalog has one prelander, so the per-prelander split is covered by the automated test, which writes rows with two prelander ids. Query the report with `prelander=demo`, with `offer=003`, with `offer=004`, and with a `from` and `to` that exclude today, for example `from=2001-01-01&to=2001-01-02`.
 
@@ -438,7 +438,7 @@ Expected: the per-offer Leads, transitions and Purchases add up to the total, an
 
 ### AN-3 Conversion denominators
 
-Automated: `pnpm test -- -t "AN-3"`. Case: one test per rate in the metric definitions table, computed from the fixture by hand.
+Automated: `pnpm test -t "AN-3"`. Case: one test per rate in the metric definitions table, computed from the fixture by hand.
 
 Manual: for each rate in the report, recompute it from the counts on the same page using the definition in the metrics document.
 
@@ -446,7 +446,7 @@ Expected: every rate equals its definition. The started metric counts step 1 sho
 
 ### AN-4 Repeat visits
 
-Automated: `pnpm test -- -t "AN-4"`. Cases: `AN-4 Q-26 two visits by one user count one user and two visits`, `AN-4 Q-21 lead return is not counted as started`.
+Automated: `pnpm test -t "AN-4"`. Cases: `AN-4 Q-26 two visits by one user count one user and two visits`, `AN-4 Q-21 lead return is not counted as started`.
 
 Manual: one jar, enter `/p/demo` twice, answer step 1 both times.
 
@@ -456,7 +456,7 @@ Expected: unique users who started is 1, visits is 2.
 
 Depends on: Q-12, P-6.
 
-Automated: `pnpm test -- -t "AN-5"`. Case: `AN-5 R-7 late purchase moves the click-date cohort and lands on today in the postback view`.
+Automated: `pnpm test -t "AN-5"`. Case: `AN-5 R-7 late purchase moves the click-date cohort and lands on today in the postback view`.
 
 Manual: seed a click dated yesterday with `POST /__test/seed`, send a Purchase for it today. Query `view=cohort` for yesterday and `view=postback` for today.
 
@@ -464,7 +464,7 @@ Expected: the cohort view shows the Purchase on yesterday's cohort with the curr
 
 ### AN-6 The MVP report
 
-Automated: `pnpm test -- -t "AN-6"`. Case: `AN-6 report page renders the five counts`.
+Automated: `pnpm test -t "AN-6"`. Case: `AN-6 report page renders the five counts`.
 
 Manual: open `$BASE/report` after the AN-1 fixture.
 
@@ -472,7 +472,7 @@ Expected: the page shows users who started, passed each step, went to an offer, 
 
 ### AN-7 The report counts recorded events
 
-Automated: `pnpm test -- -t "AN-7"`. Cases: `AN-7 empty store gives zeros`, `AN-7 fixture gives expected numbers`.
+Automated: `pnpm test -t "AN-7"`. Cases: `AN-7 empty store gives zeros`, `AN-7 fixture gives expected numbers`.
 
 Manual: reset and open the report, then run the AN-1 fixture and open it again.
 
@@ -480,7 +480,7 @@ Expected: all zeros, then the AN-1 numbers.
 
 ### AN-8 The report uses the design's metric definitions
 
-Automated: `pnpm test -- -t "AN-8"`. Case: `AN-8 every report query names a metric id from the design`.
+Automated: `pnpm test -t "AN-8"`. Case: `AN-8 every report query names a metric id from the design`.
 
 Manual: for each query in the report module, find the comment with its metric id and open that row in the metrics document.
 
@@ -492,7 +492,7 @@ Expected: every query has an id, and every id exists in the metrics document.
 
 Depends on: ID-4.
 
-Automated: `pnpm test -- -t "BIZ-2"`. Case: `BIZ-2 every event type in the catalog is accepted and stored`.
+Automated: `pnpm test -t "BIZ-2"`. Case: `BIZ-2 every event type in the catalog is accepted and stored`.
 
 Manual: one full demo run, then list event types in `state`.
 
@@ -594,31 +594,31 @@ Expected: every step produces the output the README says.
 
 ### DEMO-2 A new user gets the correct offer
 
-Automated: `pnpm test -- -t "DEMO-2"`.
+Automated: `pnpm test -t "DEMO-2"`.
 
 Manual and expected: the DEMO-2 block of the script above.
 
 ### DEMO-3 A test Lead for that user's transition
 
-Automated: `pnpm test -- -t "DEMO-3"`.
+Automated: `pnpm test -t "DEMO-3"`.
 
 Manual and expected: the DEMO-3 block. `state $JAR` then shows a Lead on 003.
 
 ### DEMO-4 The same user returns without the quiz
 
-Automated: `pnpm test -- -t "DEMO-4"`.
+Automated: `pnpm test -t "DEMO-4"`.
 
 Manual and expected: the DEMO-4 block. In a browser with the same cookie, the quiz never appears.
 
 ### DEMO-5 A Purchase changes the report
 
-Automated: `pnpm test -- -t "DEMO-5"`.
+Automated: `pnpm test -t "DEMO-5"`.
 
 Manual and expected: the DEMO-5 block, and the `/report` page shows the new Purchase after a reload.
 
 ### DEMO-6 Repeating a postback does not double the numbers
 
-Automated: `pnpm test -- -t "DEMO-6"`.
+Automated: `pnpm test -t "DEMO-6"`.
 
 Manual and expected: the DEMO-6 block. Repeat the Lead too: Lead stays 1.
 
@@ -659,7 +659,7 @@ Each TEST row is met when the cards it maps to pass.
 
 ### TEST-1 Offer selection, highest EPU, fallback to 007
 
-Automated: `pnpm test -- -t "OFF-5|OFF-6|OFF-7|OFF-8|OFF-12"`.
+Automated: `pnpm test -t "OFF-5|OFF-6|OFF-7|OFF-8|OFF-12"`.
 
 Manual: none beyond the cards it maps to.
 
@@ -667,7 +667,7 @@ Expected: all pass, and decision table rows 1 to 15 and 29 each have a test.
 
 ### TEST-2 Returning user with a Lead, including a disabled offer
 
-Automated: `pnpm test -- -t "OFF-3|OFF-4|OFF-9|ID-3"`.
+Automated: `pnpm test -t "OFF-3|OFF-4|OFF-9|ID-3"`.
 
 Manual: none beyond the cards it maps to.
 
@@ -675,7 +675,7 @@ Expected: all pass, and rows 16 to 23, 27 and 28 each have a test.
 
 ### TEST-3 Redelivered events and postbacks count once, two purchases count twice
 
-Automated: `pnpm test -- -t "PB-5|TEST-3"`. Extra case owned by this card: `TEST-3 R-3 resending the same event stores it once`.
+Automated: `pnpm test -t "PB-5|TEST-3"`. Extra case owned by this card: `TEST-3 R-3 resending the same event stores it once`.
 
 Manual: send the same `POST /api/events` body (one event) twice and compare the event count in `state`.
 
@@ -683,7 +683,7 @@ Expected: the count rises once.
 
 ### TEST-4 Malformed and unauthorised postbacks change nothing
 
-Automated: `pnpm test -- -t "PB-3|PB-8"`.
+Automated: `pnpm test -t "PB-3|PB-8"`.
 
 Manual: none beyond the cards it maps to.
 
@@ -691,7 +691,7 @@ Expected: all pass, each with a before and after snapshot.
 
 ### TEST-5 The report matches expected results on test data
 
-Automated: `pnpm test -- -t "AN-1|AN-5|AN-7"`.
+Automated: `pnpm test -t "AN-1|AN-5|AN-7"`.
 
 Manual: none beyond the cards it maps to.
 
@@ -713,7 +713,7 @@ Extra provisional tooling for this section:
 
 Depends on: data model (event catalog), ADRs 0003 and 0005.
 
-Automated: `pnpm test -- -t "NFR-1"`. Case: `NFR-1 one full visit produces nine events`.
+Automated: `pnpm test -t "NFR-1"`. Case: `NFR-1 one full visit produces nine events`.
 
 Manual:
 1. Reset, run the DEMO-2 block of the demo scenario, then `state $JAR | jq '.me.events | length'`.
@@ -821,7 +821,7 @@ Expected: all listed tests pass. In step 2 both events are stored and listed in 
 
 Depends on: ADR 0003, Q-9.
 
-Automated: `pnpm test -- -t "A-4"`. Cases: `A-4 Lead is used by the very next entry`, `A-4 Q-9 disabled offer is not selected once the change has taken effect`.
+Automated: `pnpm test -t "A-4"`. Cases: `A-4 Lead is used by the very next entry`, `A-4 Q-9 disabled offer is not selected once the change has taken effect`.
 
 Manual:
 1. Run the demo to the Lead. Right after the postback returns, send the DEMO-4 request.
@@ -833,7 +833,7 @@ Expected: step 1 gives the 302 on the first try. In step 2 the change takes effe
 
 Depends on: DEMO-8, P-5.
 
-Automated: `pnpm test -- -t "R-12"`. Cases: `R-12 malformed completion body with an email is rejected without logging the email`, `R-12 exception path redacts the request body`, `R-12 envelope has no email field: an event carrying one never reaches the Queue`, `R-12 test endpoints answer 404 in production`.
+Automated: `pnpm test -t "R-12"`. Cases: `R-12 malformed completion body with an email is rejected without logging the email`, `R-12 exception path redacts the request body`, `R-12 envelope has no email field: an event carrying one never reaches the Queue`, `R-12 test endpoints answer 404 in production`.
 
 Manual:
 1. Run the DEMO-8 manual steps.
@@ -847,7 +847,7 @@ Expected: step 3 prints 0 for the log and 0 for the Queue, R2 and events scan. S
 
 Depends on: the rate limit chosen in the design.
 
-Automated: `pnpm test -- -t "R-14"`. Cases: `R-14 client above the limit gets 429`, `R-14 normal client is unaffected`, `R-14 oversized payload gets 413`.
+Automated: `pnpm test -t "R-14"`. Cases: `R-14 client above the limit gets 429`, `R-14 normal client is unaffected`, `R-14 oversized payload gets 413`.
 
 Manual: run `load/peak.js` from one client identity above the limit while a second jar runs the demo scenario.
 
@@ -857,7 +857,7 @@ Expected: the first client gets 429 above the limit. The demo scenario gives its
 
 Depends on: metrics document (MVP-5 size limit and signal).
 
-Automated: `pnpm test -- -t "R-17"`. Case: `R-17 report rows read stays flat as events grow`.
+Automated: `pnpm test -t "R-17"`. Case: `R-17 report rows read stays flat as events grow`.
 
 Manual:
 1. After the NFR-2 run, open the report and read the rows read for each query (D1 `meta.rows_read` in the Worker log, or the equivalent for the chosen store).

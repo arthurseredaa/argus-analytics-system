@@ -146,7 +146,7 @@ Steps:
 - [ ] Unit tests per decision table row (`OFF-12 row 1 women+asia gives 003`), then `select()`.
 - [ ] The automated cases of the cards QZ-1, QZ-2, QZ-3, ID-2, OFF-1, OFF-2, OFF-10, DEMO-2, and `R-12 malformed completion body with an email is rejected without logging the email`; plus `QZ-2 step 2 wording follows the step 1 answer` and `QZ-7 a fourth step added to the flow config renders and is validated without a code change`; then routes, page, seed.
 - [ ] Explain back: Arthur walks decision table rows 5 and 7 through `select()`, and says what changes in the repository when a fourth question is added.
-- [ ] Verify: `pnpm test -- -t "OFF-5|OFF-6|OFF-7|OFF-8|OFF-12"` (TEST-1) passes and rows 1 to 15 and 29 each have a test; `pnpm test -- -t "QZ-|ID-2|OFF-1|OFF-2|OFF-10|DEMO-2"` passes; against `BASE` the DEMO-2 block of the demo script prints `{"offer_id":"003","reason":"best_epu"}`; the gate passes.
+- [ ] Verify: `pnpm test -t "OFF-5|OFF-6|OFF-7|OFF-8|OFF-12"` (TEST-1) passes and rows 1 to 15 and 29 each have a test; `pnpm test -t "QZ-|ID-2|OFF-1|OFF-2|OFF-10|DEMO-2"` passes; against `BASE` the DEMO-2 block of the demo script prints `{"offer_id":"003","reason":"best_epu"}`; the gate passes.
 - [ ] Approval, commit `feat: identity, offer selection and the quiz`, push.
 
 ---
@@ -170,7 +170,7 @@ Content:
 Steps:
 - [ ] The automated cases of the cards above, plus `R-12 envelope has no email field: an event carrying one never reaches the Queue` and `ID-4 unknown schema_version is stored and not dropped`; then the code.
 - [ ] Explain back: Arthur follows one `step_answered` from the browser to its row, and says what happens when it is sent twice.
-- [ ] Verify: `pnpm test -- -t "TEST-3|ID-1|ID-4|BIZ-2|QZ-4|QZ-5|NFR-8"` passes; against `BASE`, the same body posted twice raises `state $JAR | jq '.me.events | length'` by exactly 1 after the 30-second consumer wait; one browser visit through completion gives 8 events (the ninth, `offer_click`, is checked by NFR-1 in stage 3); the gate passes.
+- [ ] Verify: `pnpm test -t "TEST-3|ID-1|ID-4|BIZ-2|QZ-4|QZ-5|NFR-8"` passes; against `BASE`, the same body posted twice raises `state $JAR | jq '.me.events | length'` by exactly 1 after the 30-second consumer wait; one browser visit through completion gives 8 events (the ninth, `offer_click`, is checked by NFR-1 in stage 3); the gate passes.
 - [ ] Approval, commit `feat: event ingestion through the Queue`, push.
 
 ---
@@ -196,7 +196,7 @@ Steps:
 - [x] The automated cases of the cards above, plus `R-9 offer disabled after selection is re-selected at /go` and `OFF-11 click row exists before the 302`; then the code.
 - [x] Fix the demo script comments in acceptance-checks.md that expect `200` for a new postback, where ADR 0007 says `202`, in this commit.
 - [x] Explain back: Arthur walks a redelivered Lead and a second real Purchase, naming the key that tells them apart.
-- [x] Verify: `pnpm test -- -t "OFF-3|OFF-4|OFF-9|ID-3"` (TEST-2, rows 16 to 23, 27, 28), `pnpm test -- -t "PB-5|TEST-3"` (TEST-3), `pnpm test -- -t "PB-3|PB-8"` (TEST-4) and `pnpm test -- -t "A-4|NFR-1|DEMO-3|DEMO-4|DEMO-6"` pass; against `BASE`, DEMO-3 prints `202`, DEMO-4 prints `302 https://asia-connect.example/?click_id=<new id>`, the repeated Lead prints `200` with `duplicate` and `state $JAR` shows one Lead; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" tests/ scripts/` prints nothing; the gate passes.
+- [x] Verify: `pnpm test -t "OFF-3|OFF-4|OFF-9|ID-3"` (TEST-2, rows 16 to 23, 27, 28), `pnpm test -t "PB-5|TEST-3"` (TEST-3), `pnpm test -t "PB-3|PB-8"` (TEST-4) and `pnpm test -t "A-4|NFR-1|DEMO-3|DEMO-4|DEMO-6"` pass; against `BASE`, DEMO-3 prints `202`, DEMO-4 prints `302 https://asia-connect.example/?click_id=<new id>`, the repeated Lead prints `200` with `duplicate` and `state $JAR` shows one Lead; `grep -rnE -- "curl .*-L( |$)|redirect: ?'follow'" tests/ scripts/` prints nothing; the gate passes.
 - [x] Approval, commit `feat: redirect, signed postbacks and the Lead return`, push.
 
 ---
@@ -220,7 +220,7 @@ Content:
 Steps:
 - [x] The automated cases of AN-1 to AN-8, R-17 and DEMO-5; then the queries and the page.
 - [x] Explain back: Arthur says why yesterday's cohort row can change today and which view finance should read.
-- [x] Verify: `pnpm test -- -t "AN-1|AN-5|AN-7"` (TEST-5) passes against the fixture table; against `BASE`, the report saved with `jq -S .` before and after the DEMO-5 Purchase differs, by `diff`, only in the cells the DEMO-7 table lists; after DEMO-6, `jq '{lead,purchase}'` prints `{"lead":1,"purchase":1}`; `pnpm test:e2e --base $BASE` passes (MVP-1); `grep -rni bigquery src/ wrangler.jsonc` prints nothing (MVP-4); the gate passes.
+- [x] Verify: `pnpm test -t "AN-1|AN-5|AN-7"` (TEST-5) passes against the fixture table; against `BASE`, the report saved with `jq -S .` before and after the DEMO-5 Purchase differs, by `diff`, only in the cells the DEMO-7 table lists; after DEMO-6, `jq '{lead,purchase}'` prints `{"lead":1,"purchase":1}`; `pnpm test:e2e --base $BASE` passes (MVP-1); `grep -rni bigquery src/ wrangler.jsonc` prints nothing (MVP-4); the gate passes.
 - [x] Approval, commit `feat: funnel report in cohort and postback views`, push.
 
 The slice is complete here.
@@ -233,7 +233,7 @@ Estimate: 2.5 hours.
 
 Goal: the event path matches ADR 0005 and ADR 0006, with D1 as the load target. NFR-3, NFR-4, NFR-5, NFR-8, R-8, R-16.
 
-Files: `src/events/consumer.ts`, `src/events/loader.ts`, `src/events/producer.ts`, `GET /__test/health`, the loader cron in `wrangler.jsonc`, `scripts/sink.ts`, tests, an R2 lifecycle rule.
+Files: `src/events/files.ts`, `src/events/consumer.ts`, `src/events/loader.ts`, `src/events/producer.ts`, `src/events/health.ts` behind `GET /__test/health`, `src/db/events.ts`, `src/index.ts` (queue and the loader cron), the producer callers in `src/routes/`, the loader cron in `wrangler.jsonc`, `scripts/sink.ts` and `scripts/lib/sink.ts` behind `pnpm sink outage on|off`, `scripts/lib/wrangler-config.ts`, the loader ticker in `scripts/lib/dev-server.sh`, `scripts/demo.sh` and `scripts/acceptance.sh` waiting for the loader, `tests/fixtures/files.ts`, the producer, loader, pipeline and health tests, the `loaded-30d` and `rejected-30d` R2 lifecycle rules.
 
 Read first: [ADR 0005](../adr/0005-event-ingestion-and-buffering.md), "Path of an event", "Dead letter queue", "MVP: D1 as the stand-in for BigQuery"; [ADR 0006](../adr/0006-bigquery-delivery.md), "Loader"; cards NFR-3, NFR-4, NFR-5.
 
@@ -246,10 +246,10 @@ Content:
 - Lifecycle rule: `loaded/` and `rejected/` deleted after 30 days.
 
 Steps:
-- [ ] The automated cases of NFR-3, NFR-4, NFR-5, plus the ADR tests with ids in front: `R-16 events written while the loader is stopped are loaded once after it restarts`, `NFR-5 consumer write failure goes to the dead letter queue after 10 retries`, `NFR-5 a run takes at most 9,000 files`; then the code.
-- [ ] Explain back: Arthur says where one event waits while the loader is paused, and while R2 is down.
-- [ ] Verify, against `BASE`: after a demo run `__test/health` shows files in `pending/`, and after the next cron run 0 pending and the rows in D1. Drill: `pnpm sink outage on`, keep the demo script running for 10 minutes, record pending count and oldest age at start and end; demo outputs unchanged (NFR-4). `pnpm sink outage off`, record minutes until pending is 0; `SELECT COUNT(*), COUNT(DISTINCT event_id) FROM events` gives two equal numbers matching the events sent. The gate passes.
-- [ ] Approval, commit `feat: R2 event files and the loader`, push.
+- [x] The automated cases of NFR-3, NFR-4, NFR-5, plus the ADR tests with ids in front: `R-16 events written while the loader is stopped are loaded once after it restarts`, `NFR-5 consumer write failure goes to the dead letter queue after 10 retries`, `NFR-5 a run takes at most 9,000 files`; then the code.
+- [x] Explain back: Arthur says where one event waits while the loader is paused, and while R2 is down.
+- [x] Verify, against `BASE`: after a demo run `__test/health` shows files in `pending/`, and after the next cron run 0 pending and the rows in D1. Drill: `pnpm sink outage on`, keep the demo script running for 10 minutes, record pending count and oldest age at start and end; demo outputs unchanged (NFR-4). `pnpm sink outage off`, record minutes until pending is 0; `SELECT COUNT(*), COUNT(DISTINCT event_id) FROM events` gives two equal numbers matching the events sent. The gate passes.
+- [x] Approval, commit `feat: R2 event files and the loader`, push.
 
 ---
 
@@ -378,7 +378,7 @@ The list Arthur walks through at the review, so nothing built is forgotten. Each
 | The whole demo as one command, every answer and report cell checked | `pnpm test:e2e --base $BASE` | 4 |
 | An offer turned off without a deploy and `/go` re-selecting | `pnpm offer set-status 003 inactive`, then `/go?prelander=demo` | 3 |
 | A postback that is unsigned, stale or for another partner's click changes nothing; an unknown click waits in quarantine | `pnpm test -t "PB-3\|PB-4\|PB-8"`, then `counts.quarantine` in `__test/state` | 3 |
-| The event path: Queue, files in R2, the loader, and what the loader-paused drill showed | `__test/health`, the R2 bucket, the drill numbers from the stage 5 verify | 5 |
+| The event path: Queue, files in R2, the loader, and what the loader-paused drill showed | `curl $BASE/__test/health`, `pnpm sink outage on --remote`, the drill numbers in ADR 0005's Outcome | 5 |
 | Alerts and latency: the data points, the alert log line for a wrong secret | Analytics Engine query, `wrangler tail` | 6 |
 | The path to production: a push to `main`, tests, migrations, deploy, `/healthz` with the commit | the CI run list | 0 |
 | Where the architecture lives in the code | README "Architecture in the code", the folder comments | 7 |
@@ -392,11 +392,11 @@ The list Arthur walks through at the review, so nothing built is forgotten. Each
 
 | Requirement | Stage | Check |
 |---|---|---|
-| TEST-1 | 1 | `pnpm test -- -t "OFF-5\|OFF-6\|OFF-7\|OFF-8\|OFF-12"` |
-| TEST-2 | 1 (unit), 3 (integration) | `pnpm test -- -t "OFF-3\|OFF-4\|OFF-9\|ID-3"` |
-| TEST-3 | 2 (events), 3 (postbacks) | `pnpm test -- -t "PB-5\|TEST-3"` |
-| TEST-4 | 3 | `pnpm test -- -t "PB-3\|PB-8"` |
-| TEST-5 | 4 | `pnpm test -- -t "AN-1\|AN-5\|AN-7"` |
+| TEST-1 | 1 | `pnpm test -t "OFF-5\|OFF-6\|OFF-7\|OFF-8\|OFF-12"` |
+| TEST-2 | 1 (unit), 3 (integration) | `pnpm test -t "OFF-3\|OFF-4\|OFF-9\|ID-3"` |
+| TEST-3 | 2 (events), 3 (postbacks) | `pnpm test -t "PB-5\|TEST-3"` |
+| TEST-4 | 3 | `pnpm test -t "PB-3\|PB-8"` |
+| TEST-5 | 4 | `pnpm test -t "AN-1\|AN-5\|AN-7"` |
 | DEMO-1 | 7 | fresh-clone dry run from the README |
 | DEMO-2 | 1 (HTTP), 7 (browser) | DEMO-2 block against `BASE`; test `DEMO-2`; `pnpm test:browser` |
 | DEMO-3 | 3 | DEMO-3 block; test `DEMO-3` |
