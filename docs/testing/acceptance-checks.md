@@ -524,7 +524,7 @@ Automated: none.
 
 Manual: `grep -rniE "@google-cloud|googleapis|bigquery\.(googleapis|client)|GOOGLE_APPLICATION_CREDENTIALS" src/ wrangler.jsonc package.json`, and read the report module's data source.
 
-Expected: the grep prints nothing: no BigQuery client or credential in the runtime. The word "BigQuery" still appears in two comments (`src/db/events.ts` and `wrangler.jsonc`, both "MVP stand-in for BigQuery"); a search for the bare word would list them. The report reads the Cloudflare store chosen in ADR 0003.
+Expected: the grep prints nothing: no BigQuery client or credential in the runtime. The word "BigQuery" still appears in three comments (`src/db/events.ts`, `src/events/loader.ts` and `wrangler.jsonc`), each about the MVP stand-in for BigQuery; a search for the bare word would list them. The report reads the Cloudflare store chosen in ADR 0003.
 
 ### Demo scenario
 
@@ -699,13 +699,13 @@ Expected: all pass on the shared fixture, and the fixture's expected numbers are
 
 ## Non-functional requirements
 
-Figures come from [nfr.md](../requirements/nfr.md) and are not repeated here. Several thresholds are still open there (buffer size, p95 latency, store size limit). Until they are set, a card records the measured value and compares it once the number exists. Load and fault drills run against staging, not `wrangler dev`, because local runs say nothing about Cloudflare limits. They cost money on the Workers Paid plan (Q-17), so each run is announced and its cost noted in the stage plan.
+Figures come from [nfr.md](../requirements/nfr.md) and are not repeated here. Several thresholds are still open there (buffer size, p95 latency, store size limit). Until they are set, a card records the measured value and compares it once the number exists. Load and fault drills run against the deployed Worker (`BASE`), not `wrangler dev`, because local runs say nothing about Cloudflare limits. They cost money on the Workers Paid plan (Q-17), so each run is announced and its cost noted in the stage plan.
 
 Extra provisional tooling for this section:
 
 | Purpose | Tool | Fixed by |
 |---|---|---|
-| Load scripts | `load/peak.js`, `load/steady.js` (k6). Each iteration sends one event with a new `event_id` for one of many synthetic users. | MVP plan, P-7 |
+| Load script | `load/peak.js` (k6); `RATE`, `DURATION` and `USERS` override its defaults. Each iteration sends one event with a new `event_id` for one of many synthetic users. | MVP plan, P-7 |
 | Simulated sink outage | `pnpm sink outage on`, `pnpm sink outage off`, each with an optional `--remote` for the deployed Worker. `on` writes the R2 key `control/loader-paused`; while it exists the loader skips its runs, so events pile up in `pending/` and the quiz path runs normally. `off` deletes the key. The demo detects the pause: it expects the funnel cells (visits, started, steps, completed) to stay 0 and every other check as in a normal run. | ADR 0005, ADR 0006, P-8 |
 | Pipeline health | `GET /__test/health` answers a `PipelineHealth` object: `as_of`, `loader_paused`, `pending_files`, `pending_truncated`, `pending_oldest_age_ms`, `open_batches`, `last_load_at`, `events_newest_at`, `freshness_ms`. In production the same numbers go to the monitoring named in the metrics document. | ADR 0005, stage 4 metrics |
 
@@ -773,7 +773,7 @@ Depends on: ADR 0005 (buffer capacity, hours of survival, behaviour when full), 
 Automated: `pnpm test -t "NFR-5"`. Cases: `NFR-5 buffer at capacity behaves as ADR 0005 says: a send refused with Storage Limit Exceeded goes to R2`; `NFR-5 R-16 events written while the loader is stopped are loaded once after it restarts`; `NFR-5 R-8 drained rows have no duplicate event ids`; `NFR-5 R-8 an event repeated in a later file is stored once`; `NFR-5 a run resumes an unfinished batch first and stores it once`; `NFR-5 two overlapping runs store each event once`; `NFR-5 an invalid row goes to rejected/ and the rest of the batch loads`; `NFR-5 a batch failing five loads goes to rejected/`; `NFR-5 an unreachable events database does not count as a load attempt`; `NFR-5 a run takes at most 9,000 files`; `NFR-5 a run stops after its batch limit`; `NFR-5 health shows pending files and the age of the oldest`.
 
 Manual:
-1. `pnpm sink outage on --remote`, then `k6 run -e BASE=$BASE load/steady.js` at the average rate from nfr.md for a fixed time.
+1. `pnpm sink outage on --remote`, then `k6 run -e BASE=$BASE -e RATE=7 -e DURATION=<time> load/peak.js`, the average rate from nfr.md (6.94 events/s) for a fixed time.
 2. Every few minutes record buffer depth and oldest event age from `GET /__test/health`.
 3. Compare the growth per minute with the survival figures in ADR 0005. Project the time to full at the average rate and at 200 events/s.
 4. `pnpm sink outage off --remote`. Record the time to drain, then compare the count of stored rows with the count of distinct event ids.
@@ -787,8 +787,8 @@ Depends on: metrics document (p95 targets, set in stage 4 per nfr.md), R-18.
 Automated: `pnpm test -t "NFR-6"` covers the data points and the probe, not the p95 itself. Cases: `NFR-6 endpoint labels are fixed patterns, never the raw path`, `NFR-6 R-18 a request point has the endpoint as index, duration and status as doubles, country and colo as blobs`, `NFR-6 every request writes one data point`, `NFR-6 a handler that throws is recorded with status 500`, `NFR-6 a D1 overload that reaches the error handler is tagged on its point`, `NFR-6 a broken Analytics Engine binding never fails the request`, `NFR-6 probe answers 200 with the D1 time`, `NFR-6 probe writes nothing and sets no cookie`, `NFR-6 probe answers 500 when D1 fails`, and the alert cases: `NFR-6 selection_p95 fires per endpoint above 300 ms`, `NFR-6 worker_5xx_rate fires above 1% of requests`, `NFR-6 d1_overload_errors fires above 10 in an hour`, `NFR-6 parseThresholds accepts the full object`, `NFR-6 parseThresholds rejects a missing, negative or non-number value`, `NFR-6 an invalid threshold object stops the run with alert_config_error`, `NFR-6 the alert cron runs the evaluator`, `NFR-6 without the token the SQL alerts log one alert_source_unavailable line`, `NFR-6 a failing SQL API logs alert_source_unavailable with the status`, `NFR-6 SQL readings above the thresholds fire their alerts`, `NFR-6 the latency queries weight by _sample_interval over their windows`, `NFR-6 a D1 overload in a postback is tagged on its data point`, `NFR-6 the SQL client posts to the account's Analytics Engine endpoint with the token`. The p95 measurement stays manual; the three SQL alerts need the read-only token (stage 6 plan, "Needs Arthur").
 
 Manual:
-1. `k6 run -e BASE=$BASE --summary-export $TMP/steady.json load/steady.js` at the average rate, covering `GET /p/demo`, `POST /api/complete`, `GET /go?prelander=demo` and `POST /api/events`.
-2. Read p95 per endpoint from `steady.json`, and from the Workers analytics in the Cloudflare dashboard for the same window.
+1. `k6 run -e BASE=$BASE -e RATE=7 --summary-export $TMP/average.json load/peak.js` at the average rate. The script sends only `POST /api/events`; there is no load script for `GET /p/demo`, `POST /api/complete` or `GET /go?prelander=demo`.
+2. Read p95 per endpoint from `average.json`, and from the Workers analytics in the Cloudflare dashboard for the same window.
 3. Read the p95 values from the `load/peak.js` run in NFR-2.
 4. Note where k6 ran from. If the design names more than one region (NFR-7), run step 1 from each.
 

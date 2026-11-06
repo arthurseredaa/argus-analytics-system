@@ -1,6 +1,6 @@
 # 0005. Ingest events through a Queue into files in R2
 
-- Status: proposed
+- Status: accepted (2026-11-06, Part 2 stages 2 and 5)
 - Date: 2026-11-02
 - Relates to: NFR-2, NFR-3, NFR-4, NFR-5, MVP-4, MVP-5, AN-6, A-1, A-3, R-3, R-8, R-15, R-16, R-17, P-1, P-7, P-8
 
@@ -123,3 +123,15 @@ The loader-paused drill ran against the deployed Worker on 2026-11-06, from 00:4
 | Rows in `events`, total and distinct `event_id` | 1,502 and 1,502, equal to 12 × 125 + 2 |
 
 The cron trigger took about 10 minutes after the deploy before its first run on Cloudflare. A demo run in that window fails its report checks while the events wait in `pending/`.
+
+The Verification list above was written before the code, and the tests carry other names. Each bullet maps to these:
+
+- Quiz while the Queue is unavailable: `NFR-4 entry and completion answer while the Queue refuses` and `NFR-4 an event the Queue refuses is written to R2 pending/ and answers 202`.
+- Events written while the loader is stopped: `NFR-5 R-16 events written while the loader is stopped are loaded once after it restarts`, and the loader-paused drill above.
+- A resent batch stored once: `TEST-3 R-3 resending the same event stores it once` and `NFR-5 R-8 an event repeated in a later file is stored once`.
+- Consumer retries and the dead letter queue: `NFR-5 consumer write failure retries each message with the growing delay` and `NFR-5 consumer write failure goes to the dead letter queue after 10 retries`.
+- Redriven dead letter messages: no test, since the redrive script is design-only.
+- More than one event in a request: `ID-1 a request with more than one event is rejected`.
+- Unknown `schema_version`: `ID-4 unknown schema_version is stored and not dropped`.
+- Load test: one run at the spec peak against the deployed Worker, since there is no staging, and no 2x or 5x run. The figures are in `nfr.md`, "Measured in Part 2 stage 9": 59,990 requests to `/api/events`, all `202`, and the Queue and `pending/` empty 241 s after k6 stopped.
+- Report counts after a fixed demo script: `DEMO-7 the demo moves the report by the expected cells` and `scripts/demo.sh` (`pnpm test:e2e`).

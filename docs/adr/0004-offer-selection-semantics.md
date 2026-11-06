@@ -1,6 +1,6 @@
 # 0004. Offer selection: quiz again without a Lead, most recent Lead wins, one pure selection function
 
-- Status: proposed
+- Status: accepted (2026-11-04, Part 2 stage 1)
 - Date: 2026-11-02
 - Relates to: OFF-3 to OFF-12, DES-5, Q-1, Q-10, Q-20, Q-21, A-6, R-9, P-3, P-9
 
@@ -97,3 +97,4 @@ A change to the rules is a change to this function and its decision table tests,
 
 ## Outcome
 
+2026-11-04, Part 2 stage 1. Selection is one pure function, `select()` in `src/domain/select.ts`, called at entry, at completion and at the press on the offer button. `tests/unit/select.test.ts` maps every row of the decision table in `docs/requirements/offer-selection.md` to a case (`TEST-1 every decision table row is mapped to a card`). It also checks the tie-break between two Leads (`OFF-4 Q-10 leads accepted at the same time go to the higher EPU`, `OFF-4 Q-10 equal time and equal EPU go to the lower offer id`) and purity (`OFF-12 select is pure`). All 44 cases pass.

@@ -1,6 +1,6 @@
 # 0002. Identify users with a server-set first-party cookie
 
-- Status: proposed
+- Status: accepted (2026-11-04, Part 2 stage 1)
 - Date: 2026-11-02
 - Relates to: ID-1, ID-2, ID-3, QZ-3, Q-3, Q-19, Q-21, Q-27, Q-28, A-6, R-1, R-2, R-3, R-12, P-2
 

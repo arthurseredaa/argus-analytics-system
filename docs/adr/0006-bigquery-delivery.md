@@ -1,6 +1,6 @@
 # 0006. Load event files from R2 into BigQuery with load jobs every 5 minutes
 
-- Status: proposed
+- Status: accepted (2026-11-06, Part 2 stage 5, D1 standing in for BigQuery)
 - Date: 2026-11-02
 - Relates to: NFR-3, NFR-4, NFR-5, R-8, R-16, R-17, Q-2, Q-16, Q-18, P-8, MVP-4
 
@@ -112,3 +112,17 @@ A service account with permission to run jobs and write to this one dataset. The
 ## Outcome
 
 2026-11-06, Part 2 stage 5. The loader is built in `src/events/loader.ts`, with D1 `events` as its target in place of a BigQuery load job, and runs every minute. A run writes a manifest to `batches/` before the insert, drops repeated EventIDs, sends invalid rows to `rejected/`, inserts with `ON CONFLICT (event_id) DO NOTHING`, writes the batch to `loaded/` and then deletes its `pending/` files. A run takes at most 8 batches of 900 rows, 7,200 rows in all, because a Worker invocation may send D1 at most 1,000 queries. A failed insert counts as an attempt only when D1 still answers `SELECT 1`, and five attempts send the batch to `rejected/`. `control/loader-paused` in R2 pauses the loader. R2 lifecycle rules delete `loaded/` and `rejected/` files after 30 days. BigQuery load jobs remain design-only. The drill numbers are in the Outcome of ADR 0005.
+
+The Verification list above was written for BigQuery, and the tests carry other names. Each bullet maps to these:
+
+- A retry with the same job id: design-only, since the MVP has no load jobs. The nearest MVP test is `NFR-5 a run resumes an unfinished batch first and stores it once`.
+- A failed load job under a new attempt id: design-only.
+- Repeated EventIDs inside a batch: `NFR-5 R-8 the loader drops repeated event ids inside a batch`.
+- A duplicate across batches: `NFR-5 R-8 an event repeated in a later file is stored once` and `NFR-5 two overlapping runs store each event once`.
+- An invalid row: `NFR-5 an invalid row goes to rejected/ and the rest of the batch loads`, with a row whose `received_at` is not a timestamp.
+- Five failed loads: `NFR-5 a batch failing five loads goes to rejected/`.
+- The target unavailable: `NFR-5 an unreachable events database does not count as a load attempt`, ten runs against an unreachable D1.
+- The files limit per run: `NFR-5 a run takes at most 9,000 files` and `NFR-5 a run stops after its batch limit`, both with smaller limits passed to the run.
+- A new payload or envelope field reaching BigQuery: design-only.
+- The fault test: `NFR-5 R-16 events written while the loader is stopped are loaded once after it restarts` and the loader-paused drill in the Outcome of ADR 0005.
+- Freshness in staging: there is no staging. `NFR-3 accepted event is counted in the report within the freshness window` and `NFR-3 freshness_lag fires above 15 minutes when files or messages wait` cover it.

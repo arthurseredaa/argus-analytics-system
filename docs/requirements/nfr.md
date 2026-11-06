@@ -75,7 +75,7 @@ Measured on 2026-11-06 against the deployed Worker (main 16d26e9) with k6 v2.3.0
 | NFR-6 | Analytics Engine count against k6 | 59,990 and 59,990 | within 20% | met |
 | NFR-6 | p95 of `POST /api/events`, server side, at peak | 74 ms (p50 61 ms; 72 to 75 ms per minute) | at most 50 ms | not met, R-24 |
 | NFR-6 | p95 of `POST /api/events`, k6 from the laptop | 97.7 ms (p50 81.7 ms) | not a target | measured |
-| NFR-6 | Facts read, `GET /__probe`, server side, 600 requests at 10/s | p50 24 ms, p95 31 ms, p99 36 ms | 300 ms for the selection endpoints | met |
+| NFR-6 | Facts read, `GET /__probe`, server side, 601 requests at 10/s | p50 24 ms, p95 31 ms, p99 36 ms | 300 ms for the selection endpoints | met |
 | R-15 | D1 overload errors during the peak | 0 | 0 | met |
 
 The 74 ms is the Queue send. Cloudflare gives about 60 ms as the median latency of a Queue write, which returns after the message is persisted ([How we built Cloudflare Queues](https://blog.cloudflare.com/how-we-built-cloudflare-queues/), 2024-10-24), and publishes no p95. The 50 ms target assumed a faster send and stays as it was set; the miss is recorded, not hidden by a new number.

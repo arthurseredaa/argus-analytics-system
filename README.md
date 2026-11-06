@@ -150,13 +150,14 @@ pnpm check
 
 `pnpm install` wires `pnpm check` as the git pre-commit hook. `git commit --no-verify` skips it and is not used in this repository.
 
-Tests sit on three levels, and the level is the folder:
+Tests sit on four levels, each in its own folder or script:
 
-| Level       | Folder                             | What runs there                                                                                          |
-| ----------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Unit        | `tests/unit/`                      | pure functions in plain Node, such as `select()`, the quiz flow, the signature and the report arithmetic |
-| Integration | `tests/integration/`               | one request through the real Worker in the Workers runtime, with local D1, Queue and R2 bindings         |
-| End to end  | `tests/e2e/` and `scripts/demo.sh` | the Playwright quiz test in Chromium, and the demo script driving a running Worker with curl             |
+| Level               | Folder               | What runs there                                                                                          |
+| ------------------- | -------------------- | -------------------------------------------------------------------------------------------------------- |
+| Unit                | `tests/unit/`        | pure functions in plain Node, such as `select()`, the quiz flow, the signature and the report arithmetic |
+| Integration         | `tests/integration/` | one request through the real Worker in the Workers runtime, with local D1, Queue and R2 bindings         |
+| End to end, HTTP    | `scripts/demo.sh`    | the demo script driving a running Worker with curl                                                       |
+| End to end, browser | `tests/e2e/`         | the Playwright quiz test in Chromium                                                                     |
 
 `pnpm test` runs the unit and integration tests. Every test name starts with its requirement id, so `-t` runs one requirement on its own:
 
@@ -373,6 +374,4 @@ The agent instructions, the initial plan with its changes, and the three example
 
 2026-11-04: account on Workers Paid, $5 a month. The design assumes Paid (Queue retention, D1 size); the demo alone would fit on Free.
 
-2026-11-06: the stage 9 load test sent 60,601 Worker requests (the peak run and a probe run) and about 180,000 Queue operations. Both are inside the Workers Paid included amounts (10M requests and 1M Queue operations a month), so they should add nothing to the bill; the month-to-date usage was not checked. Past those amounts they would be about $0.02 and $0.07.
-
-2026-11-06: [spend]
+2026-11-06: the stage 9 load test sent 60,591 Worker requests (the peak run and a probe run) and about 180,000 Queue operations. Both are inside the Workers Paid included amounts (10M requests and 1M Queue operations a month), so they should add nothing to the bill; the month-to-date usage was not checked. Past those amounts they would be about $0.02 and $0.07.
