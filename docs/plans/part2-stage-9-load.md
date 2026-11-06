@@ -36,13 +36,13 @@
 
 **Files:** Create `load/peak.js`. Modify `package.json` (the `lint` paths).
 
-- [ ] **Step 1:** write `load/peak.js` with a header comment naming NFR-2, NFR-6, P-7 and this plan.
-- [ ] **Step 2:** local run. `pnpm migrate:local && pnpm seed --local`, then `pnpm exec wrangler dev --port 8787 --test-scheduled` in the background, then `k6 run -e RUN=local1 -e RATE=20 -e DURATION=20s -e USERS=50 --summary-export $TMP/peak.json load/peak.js`. Tick the loader with `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"` and count the run's rows with `wrangler d1 execute events --local`. Expected: 400 requests, 0% failed, 400 rows stored for 50 distinct users. Stop the dev server by its PID.
-- [ ] **Step 3:** `pnpm check`. Commit `test: load test at 200 events/s`.
+- [x] **Step 1:** write `load/peak.js` with a header comment naming NFR-2, NFR-6, P-7 and this plan.
+- [x] **Step 2:** local run. `pnpm migrate:local && pnpm seed --local`, then `pnpm exec wrangler dev --port 8787 --test-scheduled` in the background, then `k6 run -e RUN=local1 -e RATE=20 -e DURATION=20s -e USERS=50 --summary-export $TMP/peak.json load/peak.js`. Tick the loader with `curl "http://localhost:8787/__scheduled?cron=*+*+*+*+*"` and count the run's rows with `wrangler d1 execute events --local`. Expected: 400 requests, 0% failed, 400 rows stored for 50 distinct users. Stop the dev server by its PID.
+- [x] **Step 3:** `pnpm check`. Commit `test: load test at 200 events/s`.
 
 ## Controller run (after the merge, against the deployed Worker)
 
-- [ ] 1. Announce the run and its cost (decision 10) to Arthur, then set up:
+- [x] 1. Announce the run and its cost (decision 10) to Arthur, then set up:
 
   ```sh
   export BASE=https://funnels-analytics-events.bblog.workers.dev TMP=$(mktemp -d) RUN=$(date +%s)
@@ -51,7 +51,7 @@
   pnpm exec wrangler d1 execute events --remote --json --command "SELECT COUNT(*) AS n FROM events" 2>/dev/null | jq '.[0].results[0].n'   # BEFORE
   ```
 
-- [ ] 2. The run, about 5 minutes:
+- [x] 2. The run, about 5 minutes:
 
   ```sh
   START=$(date -u +%s); k6 run -e BASE=$BASE -e RUN=$RUN --summary-export $TMP/peak.json load/peak.js | tee $TMP/peak.txt; END=$(date -u +%s)
@@ -59,20 +59,20 @@
   ```
 
   Expected: about 60,000 requests, `failed` under 0.01, `throttled` 0. If `throttled` is above 0, follow decision 8.
-- [ ] 3. Drain (decision 7): wait 2 minutes, then poll until both are 0, about 5 minutes:
+- [x] 3. Drain (decision 7): wait 2 minutes, then poll until both are 0, about 5 minutes:
 
   ```sh
   until curl -s $BASE/__test/health | jq -e '.pending_files == 0 and .open_batches == 0' >/dev/null; do sleep 30; done
   ```
 
-- [ ] 4. Count, then count again a minute later. `n` equals `accepted` (plus timeouts, decision 6), `users` is 1000, AFTER minus BEFORE is at least `n`:
+- [x] 4. Count, then count again a minute later. `n` equals `accepted` (plus timeouts, decision 6), `users` is 1000, AFTER minus BEFORE is at least `n`:
 
   ```sh
   pnpm exec wrangler d1 execute events --remote --json --command "SELECT COUNT(*) AS n, COUNT(DISTINCT user_id) AS users FROM events WHERE visit_id LIKE 'load-$RUN-%'" 2>/dev/null | jq -c '.[0].results[0]'
   pnpm exec wrangler d1 execute events --remote --json --command "SELECT COUNT(*) AS n FROM events" 2>/dev/null | jq '.[0].results[0].n'   # AFTER
   ```
 
-- [ ] 5. Analytics Engine, a few minutes after the run so the points have arrived:
+- [x] 5. Analytics Engine, a few minutes after the run so the points have arrived:
 
   ```sh
   AE_SQL_TOKEN=$(grep '^AE_SQL_TOKEN=' .dev.vars.remote | cut -d= -f2-); CF_ACCOUNT_ID=$(grep '^CF_ACCOUNT_ID=' .dev.vars.remote | cut -d= -f2-)
@@ -81,5 +81,5 @@
   ```
 
   Expected: `requests` within 20% of k6's `reqs`, server-side `p95_ms` against 50 ms, `errors_5xx` and `d1_overload` 0.
-- [ ] 6. Record: a result line in the NFR-2 and NFR-6 cards and the measured numbers in nfr.md (k6 p95, server p95, error rate, both counts, where k6 ran from); the cost line in the README "Spend to date"; the card steps changed in decision 6.
+- [x] 6. Record: a result line in the NFR-2 and NFR-6 cards and the measured numbers in nfr.md (k6 p95, server p95, error rate, both counts, where k6 ran from); the cost line in the README "Spend to date"; the card steps changed in decision 6.
 - [ ] 7. Explain-back: Arthur reads the summary and names the number that would make him leave D1. The run does not touch the facts database, because `POST /api/events` only validates and sends to the Queue (ADR 0005). The ADR 0003 triggers are the facts size above 7 GB, the selection p95 above 300 ms and more than 10 D1 overload errors an hour, so `d1_overload` in step 5 is the only number here that speaks to them.

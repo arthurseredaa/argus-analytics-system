@@ -75,7 +75,10 @@
     {
       "id": 9,
       "title": "Load test (optional)",
-      "status": "pending"
+      "status": "done",
+      "closed": "2026-11-06",
+      "verified": "k6 run -e BASE=$BASE -e RUN=$RUN --summary-export $TMP/peak.json load/peak.js; wrangler d1 execute events --remote counts; Analytics Engine SQL p95 query; k6 /__probe at 10/s; pnpm check",
+      "notes": "Load test at the spec peak against the deployed Worker (main 16d26e9), k6 v2.3.0 from the author's laptop in Poland, WAW colo. 59,990 requests at 199.9/s, all 202, 0 failed, 0 429, 11 dropped iterations; 59,990 rows stored for 1,000 users, total grew by exactly 59,990; drained 241 s after k6 stopped; Analytics Engine counted 59,990, 0 5xx, 0 d1_overload. Server p95 of POST /api/events 74 ms (p50 61 ms) against the 50 ms target: not met. Cause: the Queue send, median about 60 ms per Cloudflare's Queues post; the body read and the send were not timed apart. Facts read via GET /__probe, 601 requests at 10/s: p95 31 ms. Arthur kept the 50 ms target and asked for the actual figure, the cause and the link (R-24, nfr.md \"Measured in Part 2 stage 9\"). Deviations: the run went from the stage branch before the merge (no Worker code in the stage); stage 9 ran before stage 8, which waits for Arthur's example picks. Deferred: 2x and 5x runs (P-7); a read for a user with rows and the write endpoints under load; other regions; deleting the 59,990 load-test rows from the events table (Arthur's call)."
     },
     {
       "id": 10,

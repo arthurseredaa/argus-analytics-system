@@ -728,13 +728,15 @@ Depends on: ADRs 0003 and 0005, NFR-6 thresholds, P-7.
 Automated: none, a load drill.
 
 Manual:
-1. `curl -s -X POST $BASE/__test/reset` against staging, then record `curl -s $BASE/__test/health`.
-2. `k6 run -e BASE=$BASE --summary-export $TMP/peak.json load/peak.js` (constant arrival rate 200/s, 5 minutes).
-3. Wait until `GET /__test/health` shows an empty buffer, then read the stored event count from `GET /__test/state`.
-4. Look at the Cloudflare dashboard for the store and the queue during the run: errors, "overloaded" responses, rows written.
+1. Record `curl -s $BASE/__test/health` (`loader_paused` false, `pending_files` and `open_batches` 0) and the total row count of the `events` table. There is no reset: it would wipe the demo store, and `/__test/state` counts only the caller's own events (stage 9 plan, decision 6).
+2. `k6 run -e BASE=$BASE -e RUN=$RUN --summary-export $TMP/peak.json load/peak.js` (constant arrival rate 200/s, 5 minutes, 1,000 synthetic users with `visit_id` `load-<RUN>-<n>`).
+3. Wait until `GET /__test/health` shows `pending_files` and `open_batches` 0, at least 2 minutes after k6 stopped. Count the run's rows with `COUNT(*)` and `COUNT(DISTINCT user_id)` over `visit_id LIKE 'load-<RUN>-%'`, and again a minute later.
+4. Read the request count, the server-side p95, the `5xx` count and the `d1_overload` count for `POST /api/events` over the run window from the Analytics Engine SQL API (the query is in the stage 9 plan, controller run step 5).
 5. Optional, with cost agreed: repeat at 2x and 5x (P-7).
 
 Expected: the number of events stored equals the number of 202 responses in `peak.json`. Error rate and p95 are within the NFR-6 thresholds. The store shows no overload errors (R-15). The result and the measured numbers go into nfr.md as evidence.
+
+Result, 2026-11-06, main 16d26e9, k6 v2.3.0 from the author's laptop in Poland, served by the WAW colo: 59,990 requests at 199.9 a second, all `202`, 0 failed, 0 `429`, 11 dropped iterations. 59,990 rows stored for 1,000 users, the same on the second count, and the table total grew by exactly 59,990. The queue and `pending/` were empty 241 s after k6 stopped. Analytics Engine counted 59,990 requests, 0 `5xx` and 0 `d1_overload`. Error rate and storage pass. The p95 does not: 74 ms on the server against the 50 ms of NFR-6, see the NFR-6 result and R-24. The 2x and 5x runs were not made.
 
 ### NFR-3 Analytics freshness within 15 minutes
 
@@ -793,6 +795,10 @@ Manual:
 Expected: p95 per endpoint at or below the targets in nfr.md, at average and at peak. k6 and the dashboard agree within the margin the metrics document allows. The run location is recorded next to the numbers.
 
 Result, 2026-11-06, after the stage 6 deploy (main 4b6ca3b), one demo run from the author's laptop, read through the Analytics Engine SQL API for the hour: `POST /api/events` 383 ms over 5 requests, `POST /postback/v1/:partner` 163 ms over 5, `GET /go` 60 ms over 1, `GET /p/:prelander` 59 ms over 2, `POST /api/complete` 41 ms over 1, `GET /api/report` 26 ms over 42. These samples are too small for a p95 and include cold starts; the load test of stage 9 gives the numbers to compare. `GET /__probe` answered `200` five times in 0.106 to 0.141 s. On the same deploy the alert run logged `"unavailable":[]`, so the SQL API and `Queue.metrics()` on both queues are readable on Cloudflare.
+
+Result at peak, 2026-11-06, the NFR-2 run (main 16d26e9, k6 from the author's laptop in Poland, WAW colo): `POST /api/events` has a server-side p95 of 74 ms and a p50 of 61 ms over 59,990 requests, against the target of 50 ms. Not met. The p95 per minute was 72 to 75 ms, and the p50 was 60 to 62 ms in every minute, so the time does not grow with load. k6 saw a p95 of 97.7 ms, which adds the network from the laptop. The cause is the Queue send. On Workers `Date.now()` advances only across I/O, and the handler awaits one I/O after reading the body: `EVENTS_QUEUE.send()`. Cloudflare gives about 60 ms as the median latency of a Queue write, which returns only after the message is persisted ([How we built Cloudflare Queues](https://blog.cloudflare.com/how-we-built-cloudflare-queues/), 2024-10-24). The post gives no p95. The body read and the send were not timed apart. The target stays at 50 ms; the gap is recorded as R-24.
+
+Result for the facts read, the same night: 601 requests to `GET /__probe` at 10 a second for a minute, WAW colo. The probe runs the same `readFacts` as the entry selection, for a UserID without rows. Server side p50 24 ms, p95 31 ms, p99 36 ms, max 43 ms; k6 p95 70 ms. A read for a user with rows and the write endpoints (`POST /api/complete`, `GET /go`, the postback) were not measured under load.
 
 ### NFR-7 Geography is an agreed assumption
 

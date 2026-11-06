@@ -140,3 +140,15 @@ The stage 6 plan settled four points where `metrics-and-operations.md` and the s
 The reviews changed the alert state to one window start per source (`rejected_checked_at`, `quarantine_checked_at`), so a failed read is retried on the next run. Each window now ends 30 seconds before the run. The plan's decisions 10 and 11 note both changes.
 
 On 2026-11-06 Arthur also lifted the quota limit he had set for the night. No stage was added or moved.
+
+## 2026-11-06: stage 9 runs before stage 8
+
+Stage 9, the load test, ran before stage 8. Stage 8 collects the AI work examples, and Arthur picks the final two or three of them, so it waits for him. Stage 9 needed nothing from him. `docs/state/progress.json` set stage 8 back to pending and stage 9 to in progress, and closing stage 9 makes stage 8 next again.
+
+The same night a small PR fixed the browser test. It compared the browser events in the order they reached D1, and on the deployed Worker that order is not fixed. The test now sorts them by `seq` and checks the server events as a set.
+
+The load test missed one target. `POST /api/events` had a server-side p95 of 74 ms at peak against the 50 ms of NFR-6. The AI first offered to raise the target. Arthur asked to find the cause before any fix. The cause is the Queue send, whose median Cloudflare puts at about 60 ms; the facts read from D1 measured 31 ms at p95 the same night. Arthur then chose to keep the target: "давай не змінювати вимоги, а просто записати по факту скільки вийшло, чому так, + посилання". The miss is in nfr.md, the NFR-2 and NFR-6 cards and risk R-24.
+
+The controller run also went against the plan's order. It ran from the stage branch before the merge, because the stage changes no Worker code and the deployed Worker was already main 16d26e9. The results land in the stage PR instead of a follow-up PR.
+
+Stage 8 moved after stage 9. No stage was added.
