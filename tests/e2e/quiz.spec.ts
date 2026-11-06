@@ -1,20 +1,19 @@
 // Browser test: a visitor takes the quiz in a real browser and gets the offer for their answers.
-// Serves QZ-1, ID-4, R-12 and DEMO-9: the events reach the store in order, the email travels in one request only,
+// Serves QZ-1, ID-4, R-12 and DEMO-9: the browser's events reach the store in seq order, the email travels in one request only,
 // and the offer link points at /go but the browser never follows it.
 import { expect, test } from "@playwright/test";
 
 const EMAIL = "user1@example.com";
 const ENCODED = encodeURIComponent(EMAIL);
-const EXPECTED_TYPES = [
-  "prelander_viewed",
+const BROWSER_TYPES = [
   "step_viewed",
   "step_answered",
   "step_viewed",
   "step_answered",
   "step_viewed",
-  "quiz_completed",
-  "offer_selected",
 ];
+const SERVER_TYPES = ["prelander_viewed", "quiz_completed", "offer_selected"];
+const EVENT_COUNT = BROWSER_TYPES.length + SERVER_TYPES.length;
 
 type StoredEvent = { type: string; seq: number | null; visit_id: string };
 type State = { me: { events: StoredEvent[] } };
@@ -54,17 +53,25 @@ test("QZ-1 ID-4 R-12 DEMO-9 a visitor takes the quiz, gets Asia Connect, and the
     const response = await page.request.get("/__test/state");
     raw = await response.text();
     state = JSON.parse(raw) as State;
-    if (state.me.events.length >= EXPECTED_TYPES.length) break;
+    if (state.me.events.length >= EVENT_COUNT) break;
     await page.waitForTimeout(250);
   }
   expect(state).toBeDefined();
-  // The API lists events by arrival, then seq. Only the browser numbers its events (1 to 5); server events have seq null.
+  // The API lists events by arrival (received_at, seq). QZ-1 promises order by seq within a visit, and only for the
+  // browser's events (seq 1 to 5). Arrival order across the outbox and a direct request is not promised: the outbox
+  // can send its last batch after the page's own POST /api/complete, so the server events may arrive first.
+  // So the test asserts seq order for the browser events and set membership for the server events (seq null).
   const events = state?.me.events ?? [];
-  // quiz_completed and offer_selected share one received_at and both have seq null, so their relative order is undefined.
-  const types = events.map((e) => e.type);
-  expect(types.slice(0, 6)).toEqual(EXPECTED_TYPES.slice(0, 6));
-  expect(types.slice(6).toSorted()).toEqual(["offer_selected", "quiz_completed"]);
-  expect(events.map((e) => e.seq)).toEqual([null, 1, 2, 3, 4, 5, null, null]);
+  const browser = events
+    .filter((e) => e.seq !== null)
+    .toSorted((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
+  const server = events.filter((e) => e.seq === null);
+  expect(browser.map((e) => e.type)).toEqual(BROWSER_TYPES);
+  expect(browser.map((e) => e.seq)).toEqual([1, 2, 3, 4, 5]);
+  expect(server.map((e) => e.type).toSorted()).toEqual(SERVER_TYPES.toSorted());
+  // The page view happens before any browser event, so it is still the first event by arrival.
+  expect(events[0]?.type).toBe("prelander_viewed");
+  expect(events).toHaveLength(EVENT_COUNT);
   for (const e of events) expect(e.visit_id).toBe(visit);
 
   expect(raw).not.toContain(EMAIL);
