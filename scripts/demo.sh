@@ -5,6 +5,13 @@
 # the store first. A local run needs .dev.vars, pnpm migrate:local and pnpm seed --local; a remote run needs
 # .dev.vars.remote for pnpm postback. Prints "ok <step>" per passed check; on the first mismatch it prints
 # "FAIL <step>: expected <x>, got <y>" and exits 1.
+# Events reach D1 through the Queue (a batch of up to 30 s) and the loader (one run a minute), so the
+# report checks poll for up to 150 s. Two modes, chosen from loader_paused in /__test/health:
+#   normal: waits for pending_files 0 before the reset, so no file of an earlier run lands after it.
+#   paused (pnpm sink outage on): prints "loader paused: funnel cells are expected to stay 0". The funnel
+#     cells (visits, started, steps, completed) must stay 0 and those checks end in "(loader paused)";
+#     the HTTP answers and the facts cells (lead, purchase, went_to_offer, transitions, the DEMO-5 diff)
+#     are checked as in a normal run, so the ok lines match apart from that suffix (NFR-4).
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -68,7 +75,15 @@ check_match() { # check_match <step> <regex> <got>
 }
 expect_report() { # expect_report <step> <jq filter> <expected> [seconds]: polls until the report matches
   local got
-  if got="$(wait_report "$2" "$3" "${4:-90}")"; then echo "ok $1"; else fail "$1" "$3" "$got"; fi
+  if got="$(wait_report "$2" "$3" "${4:-150}")"; then echo "ok $1"; else fail "$1" "$3" "$got"; fi
+}
+
+expect_funnel() { # expect_funnel <step> <jq filter> <expected> <expected while paused>: a funnel cell, which only the loader fills
+  if [ "$PAUSED" = "true" ]; then
+    check "$1 (loader paused)" "$4" "$(curl -s "$BASE/api/report" | jq -r "$2")"
+  else
+    expect_report "$1" "$2" "$3"
+  fi
 }
 
 JAR="$TMP/demo.jar"
@@ -80,6 +95,20 @@ base_host="${BASE#*://}"
 base_host="${base_host%%[/:]*}"
 if [ "$base_host" != "localhost" ] && [ "$base_host" != "127.0.0.1" ] && [ ! -f .dev.vars.remote ]; then
   fail "preflight" ".dev.vars.remote for the postbacks to $BASE" "no such file"
+fi
+
+health_json="$(curl -s "$BASE/__test/health")" ||
+  fail "health" "a /__test/health answer" "curl exited $?"
+PAUSED="$(printf '%s' "$health_json" | jq -r '.loader_paused' 2>/dev/null || true)"
+if [ "$PAUSED" != "true" ] && [ "$PAUSED" != "false" ]; then
+  fail "health" "true or false" "$PAUSED"
+fi
+if [ "$PAUSED" = "true" ]; then
+  echo "loader paused: funnel cells are expected to stay 0"
+else
+  if ! pending="$(wait_health '.pending_files' 0)"; then
+    fail "preflight" "pending_files 0" "$pending"
+  fi
 fi
 
 check "reset" '{"ok":true}' "$(curl -s -X POST "$BASE/__test/reset" | jq -c .)"
@@ -98,7 +127,7 @@ go="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code} %{redirect_url}' "$BASE/go
 check "DEMO-2 go 302" 302 "${go%% *}"
 CLICK="${go##*click_id=}"
 check_match "DEMO-2 go click id is 32 hex" '^[0-9a-f]{32}$' "$CLICK"
-expect_report "DEMO-2 report" '[.visits,.started,.step_2,.step_3,.completed]|@csv' '1,1,1,1,1'
+expect_funnel "DEMO-2 report" '[.visits,.started,.step_2,.step_3,.completed]|@csv' '1,1,1,1,1' '0,0,0,0,0'
 
 # DEMO-3: Lead for that click
 lead="$(pnpm -s postback lead --click "$CLICK" --txn DEMO-L1 --base "$BASE")" ||
@@ -114,7 +143,7 @@ echo "$back"
 check_match "DEMO-4 return redirects to the offer" '^302 https://asia-connect\.example/\?click_id=[0-9a-f]{32}$' "$back"
 if [ "${back##*click_id=}" = "$CLICK" ]; then fail "DEMO-4 return gets a new click id" "an id other than $CLICK" "${back##*click_id=}"; fi
 echo "ok DEMO-4 return gets a new click id"
-expect_report "DEMO-4 report visits 2" '.visits' 2
+expect_funnel "DEMO-4 report visits 2" '.visits' 2 0
 
 # DEMO-5: Purchase, report changes
 report >"$TMP/before.json"
@@ -149,6 +178,10 @@ check "DEMO-6 lead and purchase stay at 1" '{"lead":1,"purchase":1}' "$counts"
 
 # Final: the whole report against the DEMO-7 row for DEMO-6
 final="$(curl -s "$BASE/api/report" | jq -r "[$FINAL_FIELDS] | @csv")"
-check "final report" '2,1,1,1,1,1,1,2,1,1' "$final"
+if [ "$PAUSED" = "true" ]; then
+  check "final report (loader paused)" '0,0,0,0,0,0,1,2,1,1' "$final"
+else
+  check "final report" '2,1,1,1,1,1,1,2,1,1' "$final"
+fi
 
 echo "demo passed against $BASE"

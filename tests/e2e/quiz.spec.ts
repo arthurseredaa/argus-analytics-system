@@ -21,7 +21,7 @@ type State = { me: { events: StoredEvent[] } };
 test("QZ-1 ID-4 R-12 a visitor takes the quiz, gets Asia Connect, and the email stays out of every other request", async ({
   page,
 }) => {
-  test.setTimeout(75_000);
+  test.setTimeout(150_000);
   const requests: { method: string; url: string; body: string }[] = [];
   page.on("request", (r) => {
     requests.push({ method: r.method(), url: r.url(), body: r.postData() ?? "" });
@@ -39,11 +39,12 @@ test("QZ-1 ID-4 R-12 a visitor takes the quiz, gets Asia Connect, and the email 
   await expect(page.locator('section[data-result="offer"]')).toBeVisible();
   await expect(page.locator("[data-offer-name]")).toHaveText("Asia Connect");
 
-  // The Queue consumer writes the events in batches; the local queue holds a batch up to 30 s (max_batch_timeout),
-  // so wait up to 45 s for all eight before asserting.
+  // The Queue holds a batch up to 30 s (max_batch_timeout), the consumer writes it to R2, and the loader moves it
+  // into D1 on its next run (the dev server ticks every 10 s, the deployed cron once a minute),
+  // so wait up to 120 s for all eight before asserting.
   let state: State | undefined;
   let raw = "";
-  const deadline = Date.now() + 45_000;
+  const deadline = Date.now() + 120_000;
   while (Date.now() < deadline) {
     const response = await page.request.get("/__test/state");
     raw = await response.text();

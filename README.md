@@ -48,7 +48,7 @@ pnpm test:e2e                             # starts its own wrangler dev on port 
 pnpm test:e2e --base https://<worker>.workers.dev
 ```
 
-Without `--base` and `BASE`, the script starts `wrangler dev` itself and needs port 8787 free. A run takes about a minute, because the report counts events and the Queue delivers a batch after up to 30 seconds. A run against a deployed Worker resets that Worker's store and signs its postbacks with the secrets from `.dev.vars.remote`. The deployed Worker's secrets are not in the repository, so only its owner can run it that way; everyone else runs the demo locally with their own `.dev.vars`.
+Without `--base` and `BASE`, the script starts `wrangler dev` itself, with a ticker that runs the loader every 10 seconds because `wrangler dev` runs no cron, and needs port 8787 free. A local run takes a few minutes at most and a deployed run about 2 to 3 minutes, because the report counts events and an event reaches D1 through the Queue batch (up to 30 seconds) and the loader's next minute. While the loader is paused (`pnpm sink outage on`) the demo expects the funnel cells to stay 0 and checks everything else as usual. A run against a deployed Worker resets that Worker's store and signs its postbacks with the secrets from `.dev.vars.remote`. The deployed Worker's secrets are not in the repository, so only its owner can run it that way; everyone else runs the demo locally with their own `.dev.vars`.
 
 No step follows a redirect: the transition to a partner is a `302`, and the demo reads its `Location` header.
 

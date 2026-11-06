@@ -42,10 +42,12 @@ source scripts/acceptance.sh
 # complete <jar> <gender> <ethnicity> <email>   POST /api/complete, the only call that writes answers and email to D1
 # viewstep <jar> <step> [seq]                   one step_viewed event, prints the HTTP status
 # report [query]                                GET /api/report as sorted JSON without as_of and events_newest_at, so two snapshots can be compared with diff
-# wait_report <jq filter> <expected> [seconds]  polls /api/report every 3 seconds (default 90) until the filter prints the expected value; returns 1 and prints the last value on timeout
+# health                                        GET /__test/health as sorted JSON: pending files, last load time, freshness, loader_paused
+# wait_report <jq filter> <expected> [seconds]  polls /api/report every 3 seconds (default 150) until the filter prints the expected value; returns 1 and prints the last value on timeout
+# wait_health <jq filter> <expected> [seconds]  the same on /__test/health, for example: wait_health .pending_files 0
 ```
 
-The report counts events, and events reach the store through the Queue, which delivers a batch after up to 30 seconds. A check that reads the report right after a visit uses `wait_report`.
+The report counts events. An event reaches D1 up to 30 seconds after it is sent (the Queue batch) plus the next minute's loader run, so a check that reads the report right after a visit uses `wait_report`, which waits up to 150 seconds. `wrangler dev` runs no cron: `pnpm test:e2e` and `pnpm test:browser` start it with `--test-scheduled` and call the loader every 10 seconds. With a dev server you started yourself, call `curl -s "$BASE/__scheduled?cron=*+*+*+*+*"` instead of waiting.
 
 Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in these checks: following a redirect would open a partner site (DEMO-9).
 
@@ -59,7 +61,7 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 | Transition | `GET /go?prelander=&visit=`. Takes no offer ID: runs selection again for the cookie's user, stores the click, answers 302 with the click id in the `Location` query. Without answers or Leads it answers 302 to `/p/{prelander}` and stores nothing (Q-30). | ADR 0004, ADR 0007 |
 | Postback | `POST /postback/v1/{partner}` with JSON `{"click_id","type","transaction_id","occurred_at","payout?","currency?","partner_user_id?"}` and the header `X-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256 over "t.body">`, per ADR 0007. The body is limited to 16 KB (16,384 bytes); unknown fields are dropped. Answers: `202 {"status":"accepted"}` for a new conversion, `200 {"status":"duplicate"}` for a redelivery, `202 {"status":"quarantined"}` for an unknown click. `401 {"error":"unauthorized"}` for an unknown or inactive partner and for a missing, wrong or stale signature. `400` for a body over the limit (`too_large`), another content type, an invalid field, or a click on another partner's offer (`click_partner_mismatch`). `500 {"error":"config_error"}` when a partner secret or `MASTER_KEY` cannot be used (an operator error; nothing is written). `503` with `Retry-After: 30` when D1 fails, or when the Queue and R2 both fail (a refused Queue send alone is written to R2 and answers as usual). Sets no cookie. | ADR 0007 |
 | Report | `GET /api/report?from=&to=&prelander=&offer=&view=cohort\|postback`, and the `/report` page. `from` and `to` are UTC dates `YYYY-MM-DD`, `to` inclusive; `to` defaults to today and `from` to `to`; a span is at most 92 days. `prelander` and `offer` are ids of up to 64 letters, digits, `_` and `-`; empty means no filter. `view` defaults to `cohort`. Unknown parameters are ignored. Anything invalid gives `400 {"error":"invalid_query"}`. Open, sets no cookie, answers `cache-control: no-store`. Cohort keys: `view`, `from`, `to`, `prelander`, `offer`, `as_of`, `events_newest_at`, `visits`, `visitors`, `started`, `step_1`, `step_2`, `step_3`, `completed`, `dropoff_step_1`, `dropoff_step_2`, `dropoff_step_3`, `went_to_offer`, `transitions`, `lead`, `purchase`, `rates`, `rows` (each cohort row has `day`, `prelander_id`, the same counts and `rates`, and `offers`). Postback keys: `view`, `from`, `to`, `prelander`, `offer`, `as_of`, `events_newest_at`, `lead`, `purchase`, `purchase_without_lead`, `payout`, `rows` (each postback row has `day`, `prelander_id`, `lead`, `purchase`, `purchase_without_lead`, `payout` and `offers`). With `offer` set, the funnel fields and the rates built on them are `null`. | stage 4 metrics |
-| Test state | `GET /__test/state`: the caller's user (from the cookie), that user's answers, events, clicks and conversions, and global counts including the quarantine. `POST /__test/reset`. `POST /__test/seed` acts on the caller's user with `{ "answers"?: {"gender":"women"}, "leads"?: [{"offer_id","accepted_at"?}], "clicks"?: [{"offer_id","created_at"?}] }`, for cases that are slow to reach through the UI, such as a Lead on 001 or a click dated yesterday. It answers `{"ok":true,"clicks":[<Lead click ids>,<plain click ids>]}`, or `400` for an offer id outside the current catalog. Leads without `accepted_at` are ordered by array position. Seeded clicks get the reason `best_epu`, and a Lead's click uses the Lead's `accepted_at` as its `created_at`. All three answer `404` unless `TEST_ROUTES` is `on`. The deployed demo has it on (decision 1 of the stage 1 plan); a production deploy leaves it off. | ADR 0003 |
+| Test state | `GET /__test/state`: the caller's user (from the cookie), that user's answers, events, clicks and conversions, and global counts including the quarantine. `POST /__test/reset`. `POST /__test/seed` acts on the caller's user with `{ "answers"?: {"gender":"women"}, "leads"?: [{"offer_id","accepted_at"?}], "clicks"?: [{"offer_id","created_at"?}] }`, for cases that are slow to reach through the UI, such as a Lead on 001 or a click dated yesterday. It answers `{"ok":true,"clicks":[<Lead click ids>,<plain click ids>]}`, or `400` for an offer id outside the current catalog. Leads without `accepted_at` are ordered by array position. Seeded clicks get the reason `best_epu`, and a Lead's click uses the Lead's `accepted_at` as its `created_at`. Reset empties D1 and leaves R2 alone, so files waiting in `pending/` survive it. All three answer `404` unless `TEST_ROUTES` is `on`. The deployed demo has it on (decision 1 of the stage 1 plan); a production deploy leaves it off. | ADR 0003 |
 | Offer config | `pnpm offer set-status 006 inactive`, `pnpm offer set-epu 001 0.95`. A data change, no deploy (Q-9). | ADR 0003 |
 | Signed postback helper | `pnpm postback lead --click <id> --txn <id>` prints the HTTP status and body (P-10). | ADR 0007 |
 
@@ -82,8 +84,8 @@ Automated: `pnpm test -- -t "QZ-1"`. Cases: `QZ-1 accepts women`, `QZ-1 accepts 
 
 Manual:
 1. Open `$BASE/p/demo` in a browser. Step 1 offers two answers, women and men, and the wording asks who the user is looking for, not the user's own gender.
-2. `answer $JAR gender women`, wait 35 seconds for the consumer, then `state $JAR`.
-3. `answer $JAR gender robots`, wait 35 seconds, then `state $JAR`.
+2. `answer $JAR gender women`, wait up to 2 minutes for the Queue batch and the loader (`wait_health .pending_files 0` once the Queue batch has passed), then `state $JAR`.
+3. `answer $JAR gender robots`, wait the same, then `state $JAR`.
 4. `complete $JAR women asia user1@example.com`, then `state $JAR`.
 5. With a new jar, `complete $JAR2 robots asia user2@example.com`, then `state $JAR2`.
 
@@ -122,8 +124,8 @@ Automated: `pnpm test -- -t "QZ-4"`. Cases: `QZ-4 Q-4 latest completion received
 
 Manual:
 1. `answer $JAR gender women`, then `answer $JAR gender men`.
-2. Wait 35 seconds for the consumer, then `state $JAR`: the list of answer events, and no stored answers.
-3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET $BASE/go?prelander=demo`, then wait 35 seconds for the consumer and `state $JAR` again.
+2. Wait up to 2 minutes for the Queue batch and the loader, then `state $JAR`: the list of answer events, and no stored answers.
+3. `complete $JAR women asia user1@example.com`, then `complete $JAR men asia user1@example.com` (a second tab finishing later), `GET $BASE/go?prelander=demo`, then wait up to 2 minutes for the Queue batch and the loader and `state $JAR` again.
 
 Expected: after step 2 both answer events are kept and D1 has no answers, because answers are stored only at completion. After step 3 the current gender answer is `men`: the completion request the server received last wins, and an earlier `client_time` or `seq` does not change that. The selection event has a reason code and a catalog version. The click row points to the same user and offer as the selection.
 
@@ -526,7 +528,7 @@ Expected: the grep prints nothing: no BigQuery client or credential in the runti
 
 ### Demo scenario
 
-DEMO-2 to DEMO-6 run as one script from an empty store. Every step's expected output is listed; the README table (DEMO-7) must match it. `pnpm test:e2e` runs the same steps as `scripts/demo.sh` and asserts each answer; it waits for the report where the Queue delivers events (up to 30 seconds per batch), so a run takes about a minute.
+DEMO-2 to DEMO-6 run as one script from an empty store. Every step's expected output is listed; the README table (DEMO-7) must match it. `pnpm test:e2e` runs the same steps as `scripts/demo.sh` and asserts each answer; it waits for the report where events pass the Queue (a batch of up to 30 seconds) and the loader (one run a minute), so a local run takes a few minutes at most and a deployed run about 2 to 3 minutes. It first reads `loader_paused` from `/__test/health`. In a normal run it waits for `pending_files` 0 before the reset. While the loader is paused (`pnpm sink outage on`) it prints `loader paused: funnel cells are expected to stay 0` and expects `0,0,0,0,0` after DEMO-2, `0` visits after DEMO-4 and `0,0,0,0,0,0,1,2,1,1` at the end, each check named `<step> (loader paused)`; all other checks are the same.
 
 ```sh
 curl -s -X POST $BASE/__test/reset
@@ -704,8 +706,8 @@ Extra provisional tooling for this section:
 | Purpose | Tool | Fixed by |
 |---|---|---|
 | Load scripts | `load/peak.js`, `load/steady.js` (k6). Each iteration sends one event with a new `event_id` for one of many synthetic users. | MVP plan, P-7 |
-| Simulated sink outage | `pnpm sink outage on`, `pnpm sink outage off`. Delivery to the analytics sink fails while the quiz path runs normally. | ADR 0005, ADR 0006, P-8 |
-| Pipeline health | `GET /__test/health`: buffer depth, oldest undelivered event age, last delivery time. In production the same numbers go to the monitoring named in the metrics document. | ADR 0005, stage 4 metrics |
+| Simulated sink outage | `pnpm sink outage on`, `pnpm sink outage off`, each with an optional `--remote` for the deployed Worker. `on` writes the R2 key `control/loader-paused`; while it exists the loader skips its runs, so events pile up in `pending/` and the quiz path runs normally. `off` deletes the key. The demo detects the pause: it expects the funnel cells (visits, started, steps, completed) to stay 0 and every other check as in a normal run. | ADR 0005, ADR 0006, P-8 |
+| Pipeline health | `GET /__test/health` answers a `PipelineHealth` object: `as_of`, `loader_paused`, `pending_files`, `pending_truncated`, `pending_oldest_age_ms`, `open_batches`, `last_load_at`, `events_newest_at`, `freshness_ms`. In production the same numbers go to the monitoring named in the metrics document. | ADR 0005, stage 4 metrics |
 
 ### NFR-1 Planned load of 12M events per month
 
@@ -738,13 +740,13 @@ Expected: the number of events stored equals the number of 202 responses in `pea
 
 Depends on: ADR 0006, metrics document (freshness metric).
 
-Automated: `pnpm test -- -t "NFR-3"`. Case: `NFR-3 accepted event is counted in the report within the freshness window`, with the scheduler driven by test timers.
+Automated: `pnpm test -t "NFR-3"`. Cases: `NFR-3 accepted event is counted in the report within the freshness window`, `NFR-3 the loader cron runs every minute`.
 
 Manual:
 1. Note the time, send one quiz step 1 event for a new jar.
 2. Poll `curl -s $BASE/api/report | jq .started` every 30 seconds until it rises. Note the time.
 3. Repeat step 1 and 2 while `load/peak.js` runs.
-4. Read the freshness metric from `GET /__test/health`.
+4. Read `freshness_ms` and `last_load_at` from `GET /__test/health`.
 
 Expected: in both runs the event is counted within the freshness figure in nfr.md (NFR-3). The metric reports the same lag that was measured by hand.
 
@@ -752,21 +754,21 @@ Expected: in both runs the event is counted within the freshness figure in nfr.m
 
 Depends on: ADRs 0005 and 0006, P-8.
 
-Automated: `pnpm test -- -t "NFR-4"`. Case: `NFR-4 P-8 sink outage leaves entry, complete, transition and postback working`.
+Automated: `pnpm test -t "NFR-4"`. Cases: `NFR-4 P-8 sink outage leaves entry, complete, transition and postback working`, `NFR-4 an event the Queue refuses is written to R2 pending/ and answers 202`, `NFR-4 entry and completion answer while the Queue refuses`, `NFR-4 the event answers 503 with Retry-After when the Queue and R2 both refuse`, `NFR-4 a paused loader skips the run and leaves the files`.
 
 Manual:
 1. `pnpm sink outage on`.
-2. Run the whole demo scenario.
+2. `pnpm test:e2e --base $BASE`, the whole demo scenario while the loader is paused.
 3. `curl -s $BASE/__test/health`.
 4. `pnpm sink outage off`, wait for the buffer to empty, read the report.
 
-Expected: every command in step 2 gives the same output as without the outage, including the lead return. Step 3 shows a growing buffer and a growing freshness lag. After step 4 the report shows every demo event once.
+Expected: the HTTP answers and the facts cells in step 2 match a normal run, including the lead return; the funnel cells stay 0 until the loader runs. Step 3 shows a growing buffer and a growing freshness lag. After step 4 the report shows every demo event once.
 
 ### NFR-5 Guarantees, buffer limits and a long outage
 
 Depends on: ADR 0005 (buffer capacity, hours of survival, behaviour when full), R-16, R-8.
 
-Automated: `pnpm test -- -t "NFR-5"`. Cases: `NFR-5 buffer at capacity behaves as ADR 0005 says`, run with a small capacity set in the test config; `NFR-5 R-16 restored sink drains the backlog`; `NFR-5 R-8 drained rows have no duplicate event ids`.
+Automated: `pnpm test -t "NFR-5"`. Cases: `NFR-5 buffer at capacity behaves as ADR 0005 says: a send refused with Storage Limit Exceeded goes to R2`; `NFR-5 R-16 events written while the loader is stopped are loaded once after it restarts`; `NFR-5 R-8 drained rows have no duplicate event ids`; `NFR-5 R-8 an event repeated in a later file is stored once`; `NFR-5 a run resumes an unfinished batch first and stores it once`; `NFR-5 two overlapping runs store each event once`; `NFR-5 an invalid row goes to rejected/ and the rest of the batch loads`; `NFR-5 a batch failing five loads goes to rejected/`; `NFR-5 an unreachable events database does not count as a load attempt`; `NFR-5 a run takes at most 9,000 files`; `NFR-5 a run stops after its batch limit`; `NFR-5 health shows pending files and the age of the oldest`.
 
 Manual:
 1. `pnpm sink outage on`, then `k6 run -e BASE=$BASE load/steady.js` at the average rate from nfr.md for a fixed time.
@@ -810,7 +812,7 @@ Automated: `pnpm test -- -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. Extra case owned by 
 
 Manual:
 1. Run the AN-5, NFR-4 and NFR-5 manual steps.
-2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit (`answer $JAR gender women 2`, then `answer $JAR gender men 1`), wait 35 seconds for the consumer, then `state $JAR`. Then send two `complete` calls in turn and `state $JAR` again.
+2. Send step 1 events with `seq` 2 and then `seq` 1 for the same visit (`answer $JAR gender women 2`, then `answer $JAR gender men 1`), wait up to 2 minutes for the Queue batch and the loader, then `state $JAR`. Then send two `complete` calls in turn and `state $JAR` again.
 3. Check that the README section on known limitations lists these tests by name as the evidence.
 
 Expected: all listed tests pass. In step 2 both events are stored and listed in arrival order, and `seq` orders them within the visit for analytics; D1 holds no answers until `complete`; after the two calls the one received last is current (seq orders events, not answers). The README shows how each behaviour was verified.
