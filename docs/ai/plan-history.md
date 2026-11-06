@@ -127,3 +127,16 @@ The drill numbers and the Outcome sections of ADR 0005 and ADR 0006 follow in a 
 On 2026-11-06 Arthur also kept stages 6 to 9 in scope after the AI proposed cutting them to save the weekly model quota. The time estimates in this plan are human hours, and the agents need less. A Fable review of how accurately the stages were implemented runs after the last stage, then the project explainer.
 
 No stage was added or moved.
+
+## 2026-11-06: stage 6 alerts as log lines, and the Analytics Engine token
+
+The stage 6 plan settled four points where `metrics-and-operations.md` and the stage text disagreed.
+
+- Alerts are one JSON log line per firing alert, written by a cron every 5 minutes, as the stage text and the decisions table say. The design's email or webhook delivery and its once-an-hour throttle stay design-only. The "Alerts" paragraph now says this.
+- `freshness_lag` fires only when something is waiting: a file in `pending/`, or a readable Queue backlog above 0. The design's literal rule, the newest row's age alone, would fire every 5 minutes all night on the idle demo. The whole-branch review added that an unreadable backlog does not count as waiting, so a failing `Queue.metrics()` cannot bring that noise back.
+- `dlq_not_empty` reads the dead letter queue through `Queue.metrics()` on a producer binding, not through the GraphQL API, so it needs no token.
+- The three alerts read through the Analytics Engine SQL API (`selection_p95`, `worker_5xx_rate`, `d1_overload_errors`) need a read-only API token. Arthur created it and set `AE_SQL_TOKEN` and `CF_ACCOUNT_ID` as Worker secrets on 2026-11-06. Without them, each alert run logs one `alert_source_unavailable` line and the other alerts work.
+
+The reviews changed the alert state to one window start per source (`rejected_checked_at`, `quarantine_checked_at`), so a failed read is retried on the next run. Each window now ends 30 seconds before the run. The plan's decisions 10 and 11 note both changes.
+
+On 2026-11-06 Arthur also lifted the quota limit he had set for the night. No stage was added or moved.

@@ -259,7 +259,7 @@ Estimate: 2.25 hours.
 
 Goal: latency and freshness are measured, alerts fire on the [nfr.md](../requirements/nfr.md#set-in-stage-4) thresholds, and the email is absent everywhere it must be. NFR-6 (in-Worker measurement), R-12, DEMO-8, AN-5 on Cloudflare.
 
-Files: `src/ops/metrics.ts`, `src/ops/alerts.ts`, `src/routes/probe.ts`, the alert cron and threshold variables, `scripts/email-scan.sh` (`pnpm test:email-scan`, extended here), alert and probe tests.
+Files: `src/ops/metrics.ts` (a data point per request and per loader run), `src/ops/alerts.ts` (the alert cron), `src/db/ops.ts`, `src/db/postback-counts.ts` with `migrations/facts/0003_postback_counts.sql`, `src/db/analytics-engine.ts` (the SQL API reads), `src/routes/probe.ts`, `GET /__test/files` in `src/routes/test.ts`, the alert branch in `src/index.ts`, the alert cron, `ALERT_THRESHOLDS` and the `EVENTS_DLQ` binding in `wrangler.jsonc`, `scripts/email-scan.sh` with its remote mode, the metrics, alert, probe, postback count and email-absent tests, the Worker secrets `AE_SQL_TOKEN` and `CF_ACCOUNT_ID`.
 
 Read first: metrics-and-operations.md, "Latency target (NFR-6)" and "Alerts"; data-model.md, "Personal data"; cards DEMO-8, R-12.
 
@@ -270,10 +270,10 @@ Content:
 - `pnpm test:email-scan` already exists: it takes the path of a `wrangler dev` log and searches that log and the local D1 and Queue state for the address and its URL-encoded form. This stage extends it to Queue messages on Cloudflare, R2 files and a `wrangler tail` capture against `BASE`.
 
 Steps:
-- [ ] The automated cases of DEMO-8 and R-12, plus `NFR-6 every request writes one data point`, `NFR-6 probe writes nothing and sets no cookie`, and one case per alert threshold; then the code.
-- [ ] Explain back: Arthur names the first alert he would see if the loader stopped, and if a partner's secret were wrong (`postbacks_without_conversions`).
-- [ ] Verify: `pnpm test:browser` passes against local `wrangler dev`, its email scan clean; with `wrangler tail --format json > $TMP/tail.log` during a demo run against `BASE`, `grep -c` for `user1@example.com` and for `user1%40example.com` both print 0; an Analytics Engine SQL query for that hour gives p95 per endpoint, written down against 50 ms and 300 ms; drill: a signed postback for an unknown click, then `wrangler tail` shows `quarantine_new_row` within 5 minutes; `curl -s -o /dev/null -w '%{http_code} %{time_total}\n' $BASE/__probe` prints `200` and a time, recorded; the AN-5 manual card against `BASE` puts the Purchase on yesterday's cohort row and today's postback row; `pnpm check` passes.
-- [ ] Approval, commit `feat: latency data, alert cron, probe and email scan`, push.
+- [x] The automated cases of DEMO-8 and R-12, plus `NFR-6 every request writes one data point`, `NFR-6 probe writes nothing and sets no cookie`, and one case per alert threshold; then the code.
+- [x] Explain back: Arthur names the first alert he would see if the loader stopped, and if a partner's secret were wrong (`postbacks_without_conversions`).
+- [x] Verify: `pnpm test:browser` passes against local `wrangler dev`, its email scan clean; with `wrangler tail --format json > $TMP/tail.log` during a demo run against `BASE`, `grep -c` for `user1@example.com` and for `user1%40example.com` both print 0; an Analytics Engine SQL query for that hour gives p95 per endpoint, written down against 50 ms and 300 ms; drill: a signed postback for an unknown click, then `wrangler tail` shows `quarantine_new_row` within 5 minutes; `curl -s -o /dev/null -w '%{http_code} %{time_total}\n' $BASE/__probe` prints `200` and a time, recorded; the AN-5 manual card against `BASE` puts the Purchase on yesterday's cohort row and today's postback row; `pnpm check` passes.
+- [x] Approval, commit `feat: latency data, alert cron, probe and email scan`, push.
 
 ---
 
@@ -379,7 +379,7 @@ The list Arthur walks through at the review, so nothing built is forgotten. Each
 | An offer turned off without a deploy and `/go` re-selecting | `pnpm offer set-status 003 inactive`, then `/go?prelander=demo` | 3 |
 | A postback that is unsigned, stale or for another partner's click changes nothing; an unknown click waits in quarantine | `pnpm test -t "PB-3\|PB-4\|PB-8"`, then `counts.quarantine` in `__test/state` | 3 |
 | The event path: Queue, files in R2, the loader, and what the loader-paused drill showed | `curl $BASE/__test/health`, `pnpm sink outage on --remote`, the drill numbers in ADR 0005's Outcome | 5 |
-| Alerts and latency: the data points, the alert log line for a wrong secret | Analytics Engine query, `wrangler tail` | 6 |
+| Alerts and latency: the data points, the alert log line for a wrong secret | the Analytics Engine SQL query for p95 per endpoint, `wrangler tail` with `alert_run` and `postbacks_without_conversions`, `curl $BASE/__probe` | 6 |
 | The path to production: a push to `main`, tests, migrations, deploy, `/healthz` with the commit | the CI run list | 0 |
 | Where the architecture lives in the code | README "Architecture in the code", the folder comments | 7 |
 | Tests at four levels and the browser smoke run | `pnpm test` output, the Playwright summary | 7 |
