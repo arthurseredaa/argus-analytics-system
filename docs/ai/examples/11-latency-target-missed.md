@@ -23,7 +23,7 @@ The AI then gathered evidence before proposing anything:
 
 Arthur asked whether reading the facts from D1 stays under 50 ms. The AI measured it with 601 requests to `GET /__probe`: p95 31 ms.
 
-Arthur first suggested a target of 70 ms. The AI pointed out that the measured p95 of 74 ms would still miss it. Arthur asked why not 61 ms. The AI explained that 61 ms is the median and the target is a p95. Then Arthur saw that Cloudflare publishes only the median, and decided: "давай не змінювати вимоги, а просто записати по факту скільки вийшло, чому так, + посилання" ("let's not change the requirement, just record what came out, why, and the link").
+Arthur weighed two lower bars before deciding. 70 ms would still be missed by the measured p95 of 74 ms, and 61 ms is the median, not a p95. Cloudflare publishes only the median, so there was no p95 figure to set a new target from. Arthur decided: "давай не змінювати вимоги, а просто записати по факту скільки вийшло, чому так, + посилання" ("let's not change the requirement, just record what came out, why, and the link").
 
 The target stays at 50 ms. The miss is recorded with its cause and the link. Risk R-24 names the one fix and its price: answering before the send, which needs an ADR that supersedes ADR 0005.
 

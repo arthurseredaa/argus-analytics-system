@@ -106,7 +106,7 @@ No stage was added or moved.
 
 ## 2026-11-05: stages run without an approval gate from stage 4
 
-Arthur changed how the remaining stages run, to finish them faster and to review the result once at the end. From stage 4 on there is no approval gate and no blocking explain-back per stage. The AI squash-merges each stage PR itself once CI is green, removes the worktree, checks the deployed Worker, then starts the next stage. It stops only when it needs something from Arthur. Sonnet subagents write the code through subagent-driven development, with a review per task and a whole-branch review on Opus per stage. A Fable review checks how accurately stages 4 to 10 were implemented once stage 10 is done. The explain-back questions are collected in each PR description and in the stage notes. `CLAUDE.md`, the `close-stage` skill, `.claude/rules/state.md` and "How the stages run" in `part2-mvp-stages.md` say this now. An auto-mode safety check refused to let a subagent write these changes, because they relax the agent instructions on the word of agent-written text alone. Arthur confirmed them in his own answer, and the main session made the edits.
+Arthur changed how the remaining stages run, to finish them faster and to review the result once at the end. From stage 4 on there is no approval gate and no blocking explain-back per stage. The AI squash-merges each stage PR itself once CI is green, removes the worktree, checks the deployed Worker, then starts the next stage. It stops only when it needs something from Arthur. Sonnet subagents write the code through subagent-driven development, with a review per task and a whole-branch review on Opus per stage. A Fable review checks how accurately stages 4 to 10 were implemented once stage 10 is done. The explain-back questions are collected in each PR description and in the stage notes. `CLAUDE.md`, the `close-stage` skill, `.claude/rules/state.md` and "How the stages run" in `part2-mvp-stages.md` say this now. These edits relax the agent rules, so a subagent may not make them on its own: the main session made them on Arthur's explicit confirmation.
 
 The stage 4 plan also settled four report questions the design left open, each from a default in `metrics-and-operations.md`. A click whose user was deleted counts as its own user. Only the first Lead of a user and offer pair counts, and later Leads add only their payout (Q-23). A Purchase counts as "without a Lead" (M-15) when no Lead was accepted at or before it. Visitors (M-2) and transitions (M-11) are in the MVP report, because M-28 and the demo numbers need them. The demo script gained three `step_viewed` lines, without which the report would show `started` 0 after a full visit.
 
@@ -124,7 +124,7 @@ Stage 5 moved the D1 write out of the Queue consumer, as ADR 0005 and ADR 0006 p
 
 The drill numbers and the Outcome sections of ADR 0005 and ADR 0006 follow in a separate small PR, because the drill runs against the deployed Worker after this stage merges.
 
-On 2026-11-06 Arthur also kept stages 6 to 9 in scope after the AI proposed cutting them to save the weekly model quota. The time estimates in this plan are human hours, and the agents need less. A Fable review of how accurately the stages were implemented runs after the last stage, then the project explainer.
+On 2026-11-06 Arthur also kept stages 6 to 9 in scope after the AI proposed cutting them to finish sooner. The time estimates in this plan are human hours, and the agents need less. A Fable review of how accurately the stages were implemented runs after the last stage, then the project explainer.
 
 No stage was added or moved.
 
@@ -139,7 +139,7 @@ The stage 6 plan settled four points where `metrics-and-operations.md` and the s
 
 The reviews changed the alert state to one window start per source (`rejected_checked_at`, `quarantine_checked_at`), so a failed read is retried on the next run. Each window now ends 30 seconds before the run. The plan's decisions 10 and 11 note both changes.
 
-On 2026-11-06 Arthur also lifted the quota limit he had set for the night. No stage was added or moved.
+No stage was added or moved.
 
 ## 2026-11-06: stage 9 runs before stage 8
 

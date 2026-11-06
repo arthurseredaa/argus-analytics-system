@@ -9,10 +9,6 @@ Quotes are copied verbatim from the session transcript. The conversation was in 
 
 To close stage 2, Arthur had to explain the event and postback paths back in his own words. Claude offered to draw the diagram together. Arthur drew it himself in Obsidian and asked Claude to check it against the ADRs.
 
-Arthur, 18:13:57 UTC:
-
-> я сам намалюю в obsidian bruh
-
 ## What the AI proposed
 
 Checking Arthur's arrow from the Queue to the dead letter queue, Claude found that its own ADR 0005 contradicted itself:
