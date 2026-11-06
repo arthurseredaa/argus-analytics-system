@@ -375,5 +375,3 @@ The agent instructions, the initial plan with its changes, and the three example
 2026-11-04: account on Workers Paid, $5 a month. The design assumes Paid (Queue retention, D1 size); the demo alone would fit on Free.
 
 2026-11-06: the stage 9 load test sent 60,591 Worker requests (the peak run and a probe run) and about 180,000 Queue operations. Both are inside the Workers Paid included amounts (10M requests and 1M Queue operations a month), so they should add nothing to the bill; the month-to-date usage was not checked. Past those amounts they would be about $0.02 and $0.07.
-
-2026-11-06: [spend]

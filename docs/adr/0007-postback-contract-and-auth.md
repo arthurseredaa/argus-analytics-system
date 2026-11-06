@@ -1,6 +1,6 @@
 # 0007. Accept postbacks only as POST requests signed with HMAC over a timestamp and the body
 
-- Status: proposed
+- Status: accepted (2026-11-05, Part 2 stage 3)
 - Date: 2026-11-02
 - Relates to: PB-1 to PB-8, Q-6, Q-8, Q-11, Q-19, Q-23, Q-24, R-4, R-5, R-6, R-11, R-12, R-13, P-2, P-4
 

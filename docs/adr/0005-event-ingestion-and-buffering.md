@@ -1,6 +1,6 @@
 # 0005. Ingest events through a Queue into files in R2
 
-- Status: proposed
+- Status: accepted (2026-11-06, Part 2 stages 2 and 5)
 - Date: 2026-11-02
 - Relates to: NFR-2, NFR-3, NFR-4, NFR-5, MVP-4, MVP-5, AN-6, A-1, A-3, R-3, R-8, R-15, R-16, R-17, P-1, P-7, P-8
 

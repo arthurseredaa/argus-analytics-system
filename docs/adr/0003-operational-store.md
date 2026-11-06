@@ -1,6 +1,6 @@
 # 0003. Keep the facts the rules need in one D1 database
 
-- Status: proposed
+- Status: accepted (2026-11-04, Part 2 stages 0 and 1)
 - Date: 2026-11-02
 - Relates to: P-1, P-3, A-4, A-7, Q-1, Q-4, Q-8, Q-9, Q-11, Q-16, Q-25, R-9, R-10, OFF-9, MVP-4, MVP-5, MVP-6, NFR-1, NFR-2
 
@@ -101,3 +101,4 @@ Steps for either target: create the schema from the same numbered migrations; co
 
 ## Outcome
 
+2026-11-04, Part 2 stages 0 and 1. The facts live in the D1 database `FACTS` (`migrations/facts/`), and the rules read them in one batch through `readFacts()` in `src/db/facts.ts`. On 2026-11-06 the stage 9 measurements checked the first two migration triggers. The facts read had a server-side p95 of 31 ms over 601 `GET /__probe` requests, far below the 300 ms selection trigger. The peak run had 0 D1 overload errors. The facts size, the third trigger, was not checked by hand; the `d1_facts_size` alert reads it once a day.

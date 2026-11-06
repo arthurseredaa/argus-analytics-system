@@ -1,6 +1,6 @@
 # 0006. Load event files from R2 into BigQuery with load jobs every 5 minutes
 
-- Status: proposed
+- Status: accepted (2026-11-06, Part 2 stage 5, D1 standing in for BigQuery)
 - Date: 2026-11-02
 - Relates to: NFR-3, NFR-4, NFR-5, R-8, R-16, R-17, Q-2, Q-16, Q-18, P-8, MVP-4
 
