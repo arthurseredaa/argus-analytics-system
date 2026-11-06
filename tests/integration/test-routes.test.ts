@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createApp } from "../../src/app.ts";
 import { prelanderFlows } from "../../src/domain/prelanders.ts";
 import { call, storedEvent, deliver } from "../fixtures/events.ts";
+import { putPending } from "../fixtures/files.ts";
 import { cookieFrom, getPath, newCookie, postComplete } from "../fixtures/http.ts";
 
 type State = {
@@ -34,6 +35,13 @@ const complete = (cookie: string) =>
     },
     cookie,
   );
+
+const list = async (since: number) => {
+  const res = await getPath(`/__test/files?since=${since}`);
+  expect(res.status).toBe(200);
+  expect(res.headers.get("cache-control")).toBe("no-store");
+  return (await res.json()) as { keys: string[]; truncated: boolean };
+};
 
 const seed = (body: unknown, cookie?: string, override?: Partial<Env>) =>
   call(
@@ -83,6 +91,7 @@ describe("test routes", () => {
     expect((await getPath("/__test/state", undefined, app, off)).status).toBe(404);
     expect((await getPath("/__test/reset", undefined, app, off, "POST")).status).toBe(404);
     expect((await getPath("/__test/health", undefined, app, off)).status).toBe(404);
+    expect((await getPath("/__test/files?since=0", undefined, app, off)).status).toBe(404);
   });
 
   it.each([
@@ -95,6 +104,7 @@ describe("test routes", () => {
     expect((await getPath("/__test/state", undefined, app, override)).status).toBe(404);
     expect((await getPath("/__test/reset", undefined, app, override, "POST")).status).toBe(404);
     expect((await getPath("/__test/health", undefined, app, override)).status).toBe(404);
+    expect((await getPath("/__test/files?since=0", undefined, app, override)).status).toBe(404);
   });
 
   it("PB-3 test state confirms partner secrets decrypt under the worker key", async () => {
@@ -107,6 +117,20 @@ describe("test routes", () => {
     });
     expect(res.status).toBe(200);
     expect(((await res.json()) as State).partner_secrets_ok).toBe(false);
+  });
+
+  it("DEMO-8 test files lists the event files written since a time", async () => {
+    const key = await putPending([storedEvent()]);
+    const recent = await list(Date.now() - 60_000);
+    expect(recent.keys).toContain(key);
+    expect(recent.keys).toEqual(recent.keys.toSorted());
+    expect(typeof recent.truncated).toBe("boolean");
+    expect((await list(Date.now() + 60_000)).keys).not.toContain(key);
+    for (const bad of ["abc", "-1", "1.5", ""])
+      expect((await getPath(`/__test/files?since=${bad}`)).status).toBe(400);
+    const missing = await getPath("/__test/files");
+    expect(missing.status).toBe(400);
+    expect(await missing.json()).toEqual({ error: "invalid_query" });
   });
 
   it("DEMO-2 reset clears users and keeps the catalog", async () => {

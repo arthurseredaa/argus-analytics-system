@@ -352,7 +352,7 @@ The email must never appear in:
 - the analytics report;
 - the browser's localStorage: the browser keeps unsent events there, and the completion request is retried from memory, not from storage.
 
-The log-scanning test runs the demo with `u1@example.com` and asserts that the address is absent from captured logs, URLs, Queue messages, R2 files and the events table (P-11, DEMO-8, R-12). The same check searches for the UserID (ADR 0002).
+The log-scanning test runs one visit with `user1@example.com` and asserts that the address, in clear and URL-encoded, is absent from captured logs, URLs and `Location` headers, Queue messages, R2 files, the events table and Analytics Engine data points (P-11, DEMO-8, R-12). The same check searches logs and URLs for the UserID (ADR 0002). On Cloudflare, `pnpm test:email-scan --remote` scans a `wrangler tail` capture, the R2 files written since a given time (listed through `GET /__test/files`) and the events rows received since then. A message still in the Queue or in the dead letter queue cannot be read, so the `dlq_not_empty` alert covers those.
 
 ## Event catalog
 
