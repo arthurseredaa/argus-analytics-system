@@ -298,7 +298,7 @@ Each item names the test that shows the behaviour, or says that none exists.
 - A D1 events database that answers `SELECT 1` but refuses writes sends each batch to `rejected/` after five runs. The files can be moved back for 30 days. No test for this case; `NFR-5 a batch failing five loads goes to rejected/` shows the five-attempt rule.
 - Two overlapping loader runs can reset a batch's attempt count or write rows that D1 already holds to `rejected/`. `NFR-5 two overlapping runs store each event once` shows that no event is stored twice; the `rejected/` case has no test.
 - The loader skips a batch manifest it cannot parse, without a log line. No test.
-- Funnel drop-offs are not clamped, so a user whose visit crosses midnight can make one day's drop-off negative. No test.
+- Funnel drop-offs are not clamped, so a user whose visit crosses midnight can make one day's drop-off negative. The same happens when a quiz is completed with `curl` and no `step_viewed` events are sent, as in [Send a test postback](#send-a-test-postback): `completed` is then higher than `step_3`, and `/report` shows a negative drop-off at step 3. No test.
 - No test checks that the cohort and the postback views give the same totals over a full period.
 
 The NFR-8 card in [acceptance-checks.md](docs/testing/acceptance-checks.md) runs the `NFR-` tests above with `pnpm test -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. The `OFF-1` and `PB-3` tests run with `pnpm test -t "OFF-1|PB-3"`.
