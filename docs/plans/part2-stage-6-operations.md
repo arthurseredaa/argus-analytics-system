@@ -1,5 +1,7 @@
 # Part 2 stage 6: operations, implementation plan
 
+This stage is done, and its status lives in `docs/state/progress.json`. The checkboxes below were not kept up to date.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** latency and freshness are measured, alerts fire on the nfr.md thresholds, and the quiz email is absent everywhere it must be. Every request writes one Analytics Engine data point, the loader writes a freshness point per run, an alert cron every 5 minutes logs one JSON line per firing alert, `GET /__probe` measures the entry D1 batch, and `pnpm test:email-scan` also scans a `wrangler tail` capture and the R2 files and events rows on Cloudflare.
@@ -165,7 +167,7 @@ New for this stage:
   - `NFR-5 the dead letter queue is bound for its backlog only`: a producer `EVENTS_DLQ` on `events-dlq`; still no consumer of `events-dlq`.
 
   `tests/unit/alerts.test.ts`, one case per threshold, each with a reading just above and one at the threshold:
-  - `NFR-3 freshness_lag fires above 15 minutes when files or messages wait`: `freshness_ms` 900001 with `pending_files` 1 fires with value 900001 and threshold 900000; 900000 does not; 900001 with `pending_files` 0 and `queueBacklog` 0 does not; with `queueBacklog` `null` it fires.
+  - `NFR-3 freshness_lag fires above 15 minutes when files or messages wait`: `freshness_ms` 900001 with `pending_files` 1 fires with value 900001 and threshold 900000; 900000 does not; 900001 with `pending_files` 0 and `queueBacklog` 0 does not; with `queueBacklog` `null` and no pending file it does not fire.
   - `NFR-5 pending_oldest_file fires above one hour`: 3600001 fires, 3600000 does not.
   - `NFR-5 rejected_new_file fires on any new file`: 1 fires with threshold 0; 0 does not.
   - `PB-4 Q-11 quarantine_new_row fires on any new row`, `NFR-5 dlq_not_empty fires on any message`: the same shape.
@@ -351,7 +353,7 @@ The controller runs these from the main checkout after the merge deploys, with `
    kill $tail_pid
    ```
 
-   Expected: the line appears within 5 minutes (one alert cron tick) and the count is at least 1. Record the seconds.
+   Expected: the line appears within one alert cron tick plus the 30-second window lag, up to about 5.5 minutes, and the count is at least 1. Record the seconds.
 5. The probe: `for i in 1 2 3 4 5; do curl -s -o /dev/null -w '%{http_code} %{time_total}\n' $BASE/__probe; sleep 2; done`. Expected: five lines starting `200`, each with a time. Record them and where the curl ran from.
 6. p95 per endpoint for the hour of the demo, once "Needs Arthur" is done:
 

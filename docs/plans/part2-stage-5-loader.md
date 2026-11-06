@@ -1,5 +1,7 @@
 # Part 2 stage 5: R2 files and the loader, implementation plan
 
+This stage is done, and its status lives in `docs/state/progress.json`. The checkboxes below were not kept up to date.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** events travel the path of ADR 0005 and ADR 0006 with D1 as the load target. The consumer writes each Queue batch as one NDJSON file to R2 `pending/`, the producer writes a one-event file there when the Queue refuses, and a loader cron moves the files into the D1 `events` table once a minute. `pnpm sink outage on|off` pauses the loader and `GET /__test/health` shows the buffer.

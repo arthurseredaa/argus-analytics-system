@@ -1,5 +1,7 @@
 # Part 2 stage 4: the report, implementation plan
 
+This stage is done, and its status lives in `docs/state/progress.json`. The checkboxes below were not kept up to date.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `GET /api/report` and the `/report` page count what the system recorded, in the cohort view and the postback view, and the demo scenario runs end to end against the deployed Worker as `pnpm test:e2e --base $BASE` (MVP-1).
