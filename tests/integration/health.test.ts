@@ -1,12 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { storedEvent } from "../fixtures/events.ts";
-import { loadNow, pauseLoader, putPending, resumeLoader } from "../fixtures/files.ts";
+import { clearBucket, loadNow, pauseLoader, putPending, resumeLoader } from "../fixtures/files.ts";
 import { getPath } from "../fixtures/http.ts";
 import type { PipelineHealth } from "../../src/events/health.ts";
 
 const health = async (): Promise<PipelineHealth> =>
   (await (await getPath("/__test/health")).json()) as PipelineHealth;
 
+beforeEach(clearBucket);
 afterEach(resumeLoader);
 
 describe("pipeline health", () => {

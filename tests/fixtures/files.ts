@@ -35,6 +35,16 @@ export async function keysUnder(prefix: string): Promise<string[]> {
   return keys;
 }
 
+// R2 storage is shared between the tests of one file and isolated between files, so a file that
+// reads or lists the bucket empties it before each test. This removes every key the pipeline owns.
+export async function clearBucket(): Promise<void> {
+  for (const prefix of ["pending/", "batches/", "loaded/", "rejected/", "control/"]) {
+    const keys = await keysUnder(prefix);
+    for (let i = 0; i < keys.length; i += 1000)
+      await env.EVENTS_BUCKET.delete(keys.slice(i, i + 1000));
+  }
+}
+
 // The non-empty lines of a file; a missing key gives [].
 export async function linesOf(key: string): Promise<string[]> {
   const object = await env.EVENTS_BUCKET.get(key);

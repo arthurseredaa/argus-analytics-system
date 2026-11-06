@@ -17,7 +17,14 @@ export default {
   async scheduled(controller, env) {
     // The alert cron of stage 6 adds a branch here, not a Worker.
     if (controller.cron === LOADER_CRON) {
-      await runLoader(env, Date.now());
+      try {
+        await runLoader(env, Date.now());
+      } catch (err) {
+        // The class name only: an error message can quote what it failed on.
+        const name = err instanceof Error ? err.name : "unknown";
+        console.log(JSON.stringify({ msg: "loader_run", status: "error", name }));
+        throw err;
+      }
       return;
     }
     console.log(JSON.stringify({ msg: "scheduled_unknown_cron", cron: controller.cron }));

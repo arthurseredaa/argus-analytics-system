@@ -1,5 +1,5 @@
 import { createScheduledController, env } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import worker from "../../src/index.ts";
 import { LOADER_CRON } from "../../src/events/loader.ts";
 import { browserEvent } from "../fixtures/event-bodies.ts";
@@ -12,6 +12,8 @@ import {
   storedEvent,
 } from "../fixtures/events.ts";
 import {
+  clearBucket,
+  failingBucket,
   filesWith,
   keysUnder,
   linesOf,
@@ -39,6 +41,7 @@ const startedToday = async (): Promise<number> => {
 
 const runCron = (cron: string) => worker.scheduled(createScheduledController({ cron }), env);
 
+beforeEach(clearBucket);
 afterEach(async () => {
   vi.restoreAllMocks();
   await resumeLoader();
@@ -111,6 +114,20 @@ describe("the pipeline from the Queue to the events table", () => {
     expect(lines.some((l) => l.includes('"msg":"scheduled_unknown_cron"'))).toBe(true);
     // Load it now so no later test finds the file.
     await loadNow();
+  });
+
+  it("NFR-5 a loader run that throws logs one error line and rethrows", async () => {
+    const log = vi.spyOn(console, "log");
+    const run = worker.scheduled(createScheduledController({ cron: LOADER_CRON }), {
+      ...env,
+      EVENTS_BUCKET: failingBucket(),
+    });
+    await expect(run).rejects.toThrow("r2 down");
+    const lines = log.mock.calls.map((args) => String(args[0]));
+    const errors = lines.filter((l) => l.includes('"msg":"loader_run"'));
+    expect(errors.map((l) => JSON.parse(l))).toEqual([
+      { msg: "loader_run", status: "error", name: "Error" },
+    ]);
   });
 
   it("NFR-4 P-8 sink outage leaves entry, complete, transition and postback working", async () => {

@@ -80,7 +80,7 @@ Tools: `curl`, `jq`, `wrangler`, and k6 for load. Never pass `-L` to curl in the
 
 Depends on: ADR 0005 (event shape), ADR 0004 (completion).
 
-Automated: `pnpm test -- -t "QZ-1"`. Cases: `QZ-1 accepts women`, `QZ-1 accepts men`, `QZ-1 rejects other values and stores nothing`, `QZ-1 step event alone writes nothing to D1`.
+Automated: `pnpm test -t "QZ-1"`. Cases: `QZ-1 accepts women`, `QZ-1 accepts men`, `QZ-1 rejects other values and stores nothing`, `QZ-1 step event alone writes nothing to D1`.
 
 Manual:
 1. Open `$BASE/p/demo` in a browser. Step 1 offers two answers, women and men, and the wording asks who the user is looking for, not the user's own gender.
@@ -120,7 +120,7 @@ Expected: both responses return 003 with reason `best_epu`. The two users differ
 
 Depends on: ADR 0005, `docs/design/data-model.md` (event catalog).
 
-Automated: `pnpm test -- -t "QZ-4"`. Cases: `QZ-4 Q-4 latest completion received wins`, `QZ-4 R-10 two tabs complete in turn`, `QZ-4 answer events do not change D1`, `QZ-4 offer_selected carries reason and catalog version`, `QZ-4 click links to its selection, user and offer`.
+Automated: `pnpm test -t "QZ-4"`. Cases: `QZ-4 Q-4 latest completion received wins`, `QZ-4 R-10 two tabs complete in turn`, `QZ-4 answer events do not change D1`, `QZ-4 offer_selected carries reason and catalog version`, `QZ-4 click links to its selection, user and offer`.
 
 Manual:
 1. `answer $JAR gender women`, then `answer $JAR gender men`.
@@ -528,7 +528,7 @@ Expected: the grep prints nothing: no BigQuery client or credential in the runti
 
 ### Demo scenario
 
-DEMO-2 to DEMO-6 run as one script from an empty store. Every step's expected output is listed; the README table (DEMO-7) must match it. `pnpm test:e2e` runs the same steps as `scripts/demo.sh` and asserts each answer; it waits for the report where events pass the Queue (a batch of up to 30 seconds) and the loader (one run a minute), so a local run takes a few minutes at most and a deployed run about 2 to 3 minutes. It first reads `loader_paused` from `/__test/health`. In a normal run it waits for `pending_files` 0 before the reset. While the loader is paused (`pnpm sink outage on`) it prints `loader paused: funnel cells are expected to stay 0` and expects `0,0,0,0,0` after DEMO-2, `0` visits after DEMO-4 and `0,0,0,0,0,0,1,2,1,1` at the end, each check named `<step> (loader paused)`; all other checks are the same.
+DEMO-2 to DEMO-6 run as one script from an empty store. Every step's expected output is listed; the README table (DEMO-7) must match it. `pnpm test:e2e` runs the same steps as `scripts/demo.sh` and asserts each answer; it waits for the report where events pass the Queue (a batch of up to 30 seconds) and the loader (one run a minute), so a local run takes about 1.5 minutes and a deployed run about 2 to 3 minutes. It first reads `loader_paused` from `/__test/health`. In a normal run it waits for `pending_files` 0 before the reset. While the loader is paused (`pnpm sink outage on`) it prints `loader paused: funnel cells are expected to stay 0` and expects `0,0,0,0,0` after DEMO-2, `0` visits after DEMO-4 and `0,0,0,0,0,0,1,2,1,1` at the end, each check named `<step> (loader paused)`; all other checks are the same.
 
 ```sh
 curl -s -X POST $BASE/__test/reset
@@ -757,10 +757,10 @@ Depends on: ADRs 0005 and 0006, P-8.
 Automated: `pnpm test -t "NFR-4"`. Cases: `NFR-4 P-8 sink outage leaves entry, complete, transition and postback working`, `NFR-4 an event the Queue refuses is written to R2 pending/ and answers 202`, `NFR-4 entry and completion answer while the Queue refuses`, `NFR-4 the event answers 503 with Retry-After when the Queue and R2 both refuse`, `NFR-4 a paused loader skips the run and leaves the files`.
 
 Manual:
-1. `pnpm sink outage on`.
+1. `pnpm sink outage on --remote`.
 2. `pnpm test:e2e --base $BASE`, the whole demo scenario while the loader is paused.
 3. `curl -s $BASE/__test/health`.
-4. `pnpm sink outage off`, wait for the buffer to empty, read the report.
+4. `pnpm sink outage off --remote`, wait for the buffer to empty, read the report.
 
 Expected: the HTTP answers and the facts cells in step 2 match a normal run, including the lead return; the funnel cells stay 0 until the loader runs. Step 3 shows a growing buffer and a growing freshness lag. After step 4 the report shows every demo event once.
 
@@ -771,10 +771,10 @@ Depends on: ADR 0005 (buffer capacity, hours of survival, behaviour when full), 
 Automated: `pnpm test -t "NFR-5"`. Cases: `NFR-5 buffer at capacity behaves as ADR 0005 says: a send refused with Storage Limit Exceeded goes to R2`; `NFR-5 R-16 events written while the loader is stopped are loaded once after it restarts`; `NFR-5 R-8 drained rows have no duplicate event ids`; `NFR-5 R-8 an event repeated in a later file is stored once`; `NFR-5 a run resumes an unfinished batch first and stores it once`; `NFR-5 two overlapping runs store each event once`; `NFR-5 an invalid row goes to rejected/ and the rest of the batch loads`; `NFR-5 a batch failing five loads goes to rejected/`; `NFR-5 an unreachable events database does not count as a load attempt`; `NFR-5 a run takes at most 9,000 files`; `NFR-5 a run stops after its batch limit`; `NFR-5 health shows pending files and the age of the oldest`.
 
 Manual:
-1. `pnpm sink outage on`, then `k6 run -e BASE=$BASE load/steady.js` at the average rate from nfr.md for a fixed time.
+1. `pnpm sink outage on --remote`, then `k6 run -e BASE=$BASE load/steady.js` at the average rate from nfr.md for a fixed time.
 2. Every few minutes record buffer depth and oldest event age from `GET /__test/health`.
 3. Compare the growth per minute with the survival figures in ADR 0005. Project the time to full at the average rate and at 200 events/s.
-4. `pnpm sink outage off`. Record the time to drain, then compare the count of stored rows with the count of distinct event ids.
+4. `pnpm sink outage off --remote`. Record the time to drain, then compare the count of stored rows with the count of distinct event ids.
 
 Expected: the measured growth matches ADR 0005 within the margin it states. Drain completes and the two counts are equal. The alert named in the metrics document fired during the outage.
 
@@ -808,7 +808,7 @@ Expected: Q-2 is answered or its default is stated in the design. The store sits
 
 Depends on: ADRs 0005 and 0007, Q-11, Q-12.
 
-Automated: `pnpm test -- -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. Extra case owned by this card: `NFR-8 R-3 events arriving out of order are all stored and leave D1 unchanged`, `NFR-8 R-3 the completion received last decides the stored answers`.
+Automated: `pnpm test -t "NFR-8|AN-5|PB-4|NFR-4|NFR-5"`. Extra case owned by this card: `NFR-8 R-3 events arriving out of order are all stored and leave D1 unchanged`, `NFR-8 R-3 the completion received last decides the stored answers`.
 
 Manual:
 1. Run the AN-5, NFR-4 and NFR-5 manual steps.

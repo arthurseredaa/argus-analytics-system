@@ -1,10 +1,11 @@
 import { env } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { insertEvents, newestEventAt, pingEvents } from "../../src/db/events.ts";
 import { LOADER_LIMITS, batchId, runLoader } from "../../src/events/loader.ts";
 import { deepPayload } from "../fixtures/event-bodies.ts";
 import { eventsOf, storedEvent } from "../fixtures/events.ts";
 import {
+  clearBucket,
   insertFailingEvents,
   keysUnder,
   linesOf,
@@ -21,6 +22,7 @@ const manifestOf = async (id: string) => {
   return object === null ? null : ((await object.json()) as { attempt: number; files: string[] });
 };
 
+beforeEach(clearBucket);
 afterEach(() => vi.restoreAllMocks());
 
 describe("the loader", () => {

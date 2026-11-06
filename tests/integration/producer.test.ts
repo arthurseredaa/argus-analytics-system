@@ -1,10 +1,10 @@
 import { env } from "cloudflare:test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { derivedEventId } from "../../src/events/envelope.ts";
 import { sendEvent } from "../../src/events/producer.ts";
 import { browserEvent } from "../fixtures/event-bodies.ts";
-import { call, failingQueue, postEvent, storedEvent } from "../fixtures/events.ts";
-import { failingBucket, filesWith, linesOf } from "../fixtures/files.ts";
+import { call, eventsOf, failingQueue, postEvent, storedEvent } from "../fixtures/events.ts";
+import { clearBucket, failingBucket, filesWith, linesOf, loadNow } from "../fixtures/files.ts";
 import { newCookie } from "../fixtures/http.ts";
 import { leadBody, postback, userWithClick } from "../fixtures/postback.ts";
 
@@ -33,6 +33,7 @@ const complete = (cookie: string, override: Partial<Env>) =>
     override,
   );
 
+beforeEach(clearBucket);
 afterEach(() => vi.restoreAllMocks());
 
 describe("the producer's R2 fallback", () => {
@@ -53,6 +54,18 @@ describe("the producer's R2 fallback", () => {
     };
     expect(stored).toMatchObject({ event_id: event.event_id, user_id: idOf(cookie) });
     expect(typeof stored.received_at).toBe("number");
+  });
+
+  it("NFR-4 an event the Queue refuses reaches the events table through the loader", async () => {
+    const cookie = newCookie();
+    const event = browserEvent();
+    const res = await postEvent(event, cookie, { EVENTS_QUEUE: failingQueue() });
+    expect(res.status).toBe(202);
+    expect(await eventsOf(idOf(cookie))).toHaveLength(0);
+    await loadNow();
+    const rows = await eventsOf(idOf(cookie));
+    expect(rows.map((r) => r.event_id)).toEqual([event.event_id]);
+    expect(await filesWith("pending/", event.event_id as string)).toEqual([]);
   });
 
   it("NFR-5 buffer at capacity behaves as ADR 0005 says: a send refused with Storage Limit Exceeded goes to R2", async () => {
