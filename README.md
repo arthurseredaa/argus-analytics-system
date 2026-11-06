@@ -339,6 +339,7 @@ The dead letter queue redrive script does not exist yet. When `dlq_not_empty` fi
 API=https://api.cloudflare.com/client/v4/accounts/<account_id>/queues
 AUTH="Authorization: Bearer $CF_API_TOKEN"
 pnpm exec wrangler queues consumer http add events-dlq
+trap 'pnpm exec wrangler queues consumer http remove events-dlq' EXIT   # also on a failed send
 
 # Repeat until a pull returns no messages. Pulled json bodies arrive base64-encoded.
 curl -sf -X POST "$API/<dlq_queue_id>/messages/pull" -H "$AUTH" -H 'content-type: application/json' \
@@ -348,11 +349,9 @@ jq '{messages: [.result.messages[] | {body: (.body | @base64d | fromjson), conte
   jq -e '.success == true' > /dev/null || exit 1   # a failed send stops here, before the ack
 jq '{acks: [.result.messages[] | {lease_id}], retries: []}' pulled.json |
   curl -sf -X POST "$API/<dlq_queue_id>/messages/ack" -H "$AUTH" -H 'content-type: application/json' -d @-
-
-pnpm exec wrangler queues consumer http remove events-dlq
 ```
 
-The last line removes the pull consumer again. A pull consumer has a retry limit, and a message that reaches it is deleted, while ADR 0005 keeps the dead letter queue without a consumer so that no retry limit deletes its messages.
+The `trap` removes the pull consumer again on every exit, a failed send included. A pull consumer has a retry limit, and a message that reaches it is deleted, while ADR 0005 keeps the dead letter queue without a consumer so that no retry limit deletes its messages.
 
 ## Deploy
 
