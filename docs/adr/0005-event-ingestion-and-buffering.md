@@ -109,3 +109,17 @@ The spec's peak, 60,000 events in 5 minutes, is 0.2% of the Queue backlog. Event
 
 ## Outcome
 
+2026-11-06, Part 2 stage 5. The path is built as decided, with D1 as the MVP stand-in for BigQuery. The Queue consumer in `src/events/consumer.ts` writes each batch as one NDJSON file to R2 `pending/` and acknowledges it. A failed write retries after 1, 2, 4, 8, 16 and 32 minutes, then hourly, and after 10 retries the batch goes to `events-dlq`. When the Queue refuses an event, `src/events/producer.ts` writes a one-event file to `pending/`. `/api/events` and postbacks answer `503` only when the Queue and R2 both fail. Quiz completion and `/go` send their events in the background and never answer `503`. The dead letter queue redrive script is still design-only.
+
+The loader-paused drill ran against the deployed Worker on 2026-11-06, from 00:46 UTC:
+
+| Measure | Result |
+|---|---|
+| Demo runs in 10 minutes with the loader paused | 125, every one passed |
+| `pending/` files at the start and at the end | 0 and 20, about one per 30-second Queue batch |
+| Oldest pending file at the end | 568 s |
+| Demo answers while paused | the same `ok` lines as a normal run, funnel cells 0 |
+| Time to drain `pending/` after the loader resumed | 61 s |
+| Rows in `events`, total and distinct `event_id` | 1,502 and 1,502, equal to 12 × 125 + 2 |
+
+The cron trigger took about 10 minutes after the deploy before its first run on Cloudflare. A demo run in that window fails its report checks while the events wait in `pending/`.

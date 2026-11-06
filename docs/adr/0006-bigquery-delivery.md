@@ -111,3 +111,4 @@ A service account with permission to run jobs and write to this one dataset. The
 
 ## Outcome
 
+2026-11-06, Part 2 stage 5. The loader is built in `src/events/loader.ts`, with D1 `events` as its target in place of a BigQuery load job, and runs every minute. A run writes a manifest to `batches/` before the insert, drops repeated EventIDs, sends invalid rows to `rejected/`, inserts with `ON CONFLICT (event_id) DO NOTHING`, writes the batch to `loaded/` and then deletes its `pending/` files. A run takes at most 8 batches of 900 rows, 7,200 rows in all, because a Worker invocation may send D1 at most 1,000 queries. A failed insert counts as an attempt only when D1 still answers `SELECT 1`, and five attempts send the batch to `rejected/`. `control/loader-paused` in R2 pauses the loader. R2 lifecycle rules delete `loaded/` and `rejected/` files after 30 days. BigQuery load jobs remain design-only. The drill numbers are in the Outcome of ADR 0005.
