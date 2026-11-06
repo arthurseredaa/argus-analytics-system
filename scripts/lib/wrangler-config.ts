@@ -4,10 +4,13 @@ import ts from "typescript";
 
 export type WranglerConfig = {
   triggers?: { crons?: string[] };
+  vars?: Record<string, unknown>;
   queues?: {
+    producers?: { binding: string; queue: string }[];
     consumers?: { queue: string; max_retries?: number; dead_letter_queue?: string }[];
   };
   r2_buckets?: { binding: string; bucket_name: string }[];
+  analytics_engine_datasets?: { binding: string; dataset: string }[];
 };
 
 export function readWranglerConfig(text: string): WranglerConfig {

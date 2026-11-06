@@ -8,6 +8,8 @@ export const LOADED_PREFIX = "loaded/";
 export const REJECTED_PREFIX = "rejected/";
 export const PAUSE_KEY = "control/loader-paused";
 export const LAST_LOAD_KEY = "control/last-load.json";
+// Written by the alert run: { checked_at, sizes_checked_at }.
+export const ALERT_STATE_KEY = "control/alert-state.json";
 
 export const NDJSON_PUT: R2PutOptions = { httpMetadata: { contentType: "application/x-ndjson" } };
 

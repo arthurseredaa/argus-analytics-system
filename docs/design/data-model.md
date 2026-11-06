@@ -282,6 +282,7 @@ All event files live in the one bucket `funnels-events`. The keys are defined in
 | `rejected/<batch_id>-invalid.ndjson` | the loader | raw lines that failed validation |
 | `control/loader-paused` | an operator | the pause flag; the loader skips a run while it exists |
 | `control/last-load.json` | the loader | `{ at, files, rows }` of the last run that loaded a batch |
+| `control/alert-state.json` | the alert run | `{ checked_at, sizes_checked_at }`: the end of the last alert window and the last time both D1 sizes were read |
 
 Lifecycle: `loaded/` and `rejected/` expire after 30 days, through the bucket rules `loaded-30d` and `rejected-30d`. R2 lifecycle rules have no field in `wrangler.jsonc`, so they are applied once to the account with `wrangler r2 bucket lifecycle add`. Nothing deletes `pending/` or `batches/` automatically (ADR 0006).
 
