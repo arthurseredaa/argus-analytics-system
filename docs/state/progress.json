@@ -70,7 +70,10 @@
     {
       "id": 8,
       "title": "AI evidence",
-      "status": "next"
+      "status": "done",
+      "closed": "2026-11-06",
+      "verified": "email and secret greps from the stage text, tracked .dev.vars check, four sections per chosen example, pnpm check",
+      "notes": "Arthur picked examples 10 (/go without an offer id), 11 (the latency target missed under load, drafted this stage from the stage 9 session) and 06 (the hand-drawn diagram). An Opus subagent tightened the three with the humanizer skill without changing facts; the probe count in 11 was corrected to 601. docs/ai/README.md indexes the instructions, the plan history and the three examples; the README links it. CLAUDE.md gained \"How a Part 2 stage runs\" and a rule to find the cause before moving a missed target. Verify greps: the email grep matches only git@github.com in a lint test, User1@Example.com in a hashing test and the grep pattern quoted in acceptance-checks.md; the secret grep matches only test fixture secrets (test-partner-a-secret, not-the-partner-secret, the TEST_PARTNER_SECRETS name) and the stage 7 plan line quoting the grep. No .dev.vars file is tracked. Each chosen example has 4 sections. Left as found: one sentence in example 06 about the diagram's third revision is ambiguous on whether the Report block was added or removed. Explain-back is Arthur's: for each example, one sentence on what he changed in the AI's proposal and why."
     },
     {
       "id": 9,
@@ -83,7 +86,7 @@
     {
       "id": 10,
       "title": "Self-review and hand-in",
-      "status": "pending"
+      "status": "next"
     }
   ]
 }

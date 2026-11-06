@@ -43,3 +43,16 @@ The spec asks for the agent instructions (this file), the initial plan, signific
 - Ambiguities in the spec go to `docs/requirements/open-questions.md` before implementation. Do not settle them silently in code.
 - Email addresses never go into URLs or logs. Tests and fixtures use synthetic `@example.com` addresses only.
 - Every prompt to a subagent starts with: read `docs/plans/_subagent-brief.md` first. The task brief and the stage plan come after it.
+- When a measurement misses a target, find the cause before proposing a fix. A target is not moved to fit a result without Arthur's decision.
+
+## How a Part 2 stage runs
+
+This is how the Part 2 stages ran. Each one went to `main` as one squash-merged PR from the branch `part2-stage-<n>`; stages 0 to 3 also waited for Arthur's approval before the merge.
+
+1. Plan. The stage text in `docs/plans/part2-mvp-stages.md` becomes a plan file `docs/plans/part2-stage-<n>-<topic>.md`, written with the `superpowers:writing-plans` skill. It lists the decisions the stage text leaves open and the exact verification. The plan is the first commit of the stage.
+2. Isolation. Each stage gets a git worktree under `.claude/worktrees/part2-stage-<n>` on the branch `part2-stage-<n>`, which goes to `main` through one PR.
+3. Code. From stage 4 on, the `superpowers:subagent-driven-development` skill runs the plan task by task. Sonnet subagents implement, each task gets a review, and Opus reviews the whole branch at the end. Fable does cold reads of documents meant for a reader who has not seen the project, such as the README.
+4. Limits on subagents. They never push. They never run anything against the deployed Worker: no `--remote` and no `BASE` of the real URL. Drills and load tests against the deployed Worker are run by the main session after the merge.
+5. Secrets. Arthur sets Worker secrets himself with `wrangler secret put`. Their values never pass through the AI. Scripts that need a token read it from `.dev.vars.remote` inside the shell and print only the result.
+6. Close. The `close-stage` skill runs the verification, `pnpm stage:close`, the "What to show at the review" row and the PR. From stage 4 on, once CI is green, the AI squash-merges, removes the worktree, pulls `main`, waits for the deploy run and checks `/healthz` and the stage's deployed behaviour.
+7. Known CI noise. The `e2e` job sometimes hits its 3-minute timeout while installing Chromium's system libraries. `gh run rerun <id> --failed` fixes it; the tests themselves did not fail.

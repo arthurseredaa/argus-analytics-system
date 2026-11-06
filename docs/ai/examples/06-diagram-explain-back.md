@@ -7,7 +7,7 @@ Quotes are copied verbatim from the session transcript. The conversation was in 
 
 ## Task given to the AI
 
-To close stage 2, Arthur had to explain the event and postback paths back in his own words. Claude offered to draw the diagram together; Arthur drew it himself in Obsidian and asked Claude to check it against the ADRs.
+To close stage 2, Arthur had to explain the event and postback paths back in his own words. Claude offered to draw the diagram together. Arthur drew it himself in Obsidian and asked Claude to check it against the ADRs.
 
 Arthur, 18:13:57 UTC:
 
@@ -25,9 +25,9 @@ Claude, 18:33:24 UTC:
 >
 > Якщо R2 лежить годинами, consumer падає на кожній спробі, і після 10 спроб повідомлення переходять у DLQ. Тобто вони не лежать у черзі 14 днів. Дані не губляться, бо DLQ теж черга з 14 днями зберігання, але повернути їх звідти треба окремим кроком.
 
-A later check of the `rejected/` folder found two more gaps in ADR 0006: no retention for the folder, and no limit on load job attempts, so one batch BigQuery kept rejecting would have used up the daily 1,500 jobs.
+A later check of the `rejected/` folder found two more gaps in ADR 0006. The folder had no retention, and load job attempts had no limit, so one batch that BigQuery kept rejecting would have used up the daily 1,500 jobs.
 
-Claude then pointed out a detail on the diagram, the fallback note "save each event", and claimed the Worker writes one file per request with possibly several events. Arthur asked how the Worker would join events:
+Claude then picked out the fallback note "save each event" on the diagram and claimed that the Worker writes one file per request, possibly with several events in it. Arthur asked how the Worker would join the events:
 
 Arthur, 19:03:11 UTC:
 
@@ -59,7 +59,7 @@ Arthur, 19:06:01 UTC:
 
 > Вносимо і записуємо ці кейси, тоді мій малюнок коректний? чекни ще раз
 
-In his second version of the diagram Arthur had set the `rejected/` alert at 1% of events. Claude argued for alerting on any rejected file, since the Worker already rejects malformed events and anything in `rejected/` means a bug; the third version says "+raise alert" with no threshold.
+In his second version of the diagram Arthur had set the `rejected/` alert at 1% of events. Claude argued for an alert on any rejected file: the Worker already rejects malformed events, so anything in `rejected/` means a bug. The third version says "+raise alert" with no threshold.
 
 What was written:
 
@@ -71,7 +71,7 @@ The diagram caught a contradiction the ADR review had missed, and Arthur's quest
 
 ## Verification
 
-- Retry delays up to 24 hours, the dead letter queue behaviour, the pull consumer's `v8` limitation, R2 deletes of up to 1,000 keys per call and the 10,000 subrequests per invocation were checked on the Cloudflare docs on 2026-11-02; the links are in the References of ADRs 0005 and 0006.
+- Retry delays up to 24 hours, the dead letter queue behaviour, the pull consumer's `v8` limitation, R2 deletes of up to 1,000 keys per call and the 10,000 subrequests per invocation were checked on the Cloudflare docs on 2026-11-02. The links are in the References of ADRs 0005 and 0006.
 - The retry schedule adds up to 303 minutes (1 + 2 + 4 + 8 + 16 + 32 + 4 × 60), the figure in `nfr.md`.
 - The tests named in the ADRs (`consumer write failure is retried with growing delays and goes to the dead letter queue after 10 retries`, `load job failing five times moves the batch to rejected`, `BigQuery unavailable does not count as a load attempt`, `a run takes at most 9,000 files`) are written with the implementation in Part 2.
 - The diagram itself: `docs/design/architecture.png`. The third revision, after the fixes above, became the design's architecture diagram in stage 5 (2026-11-03) with a Report block, the list of D1 tables, the BigQuery view and the duplicate retry notes removed.

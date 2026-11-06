@@ -313,10 +313,10 @@ Read first: plan-history.md, whole; examples 01 to 08 and any added in Part 2.
 Content: Arthur picks two or three examples, each with the template's four parts. `CLAUDE.md` is updated to how Part 2 actually ran. acceptance-checks.md has no AI cards, so the checks are listed here.
 
 Steps:
-- [ ] Arthur picks; the AI tightens the text with the humanizer skill without changing facts.
+- [x] Arthur picks; the AI tightens the text with the humanizer skill without changing facts.
 - [ ] Explain back: for each example, Arthur says in one sentence what he changed in the AI's proposal and why.
-- [ ] Verify: `grep -rnE "[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}" --exclude-dir=node_modules --exclude=pnpm-lock.yaml . | grep -v "@example\.com"` prints nothing; `grep -rnEi "(token|secret|api[_-]?key)[\"' ]*[:=][\"' ]*[A-Za-z0-9_-]{20,}" --exclude-dir=node_modules .` prints nothing; `git ls-files | grep "\.dev\.vars$"` prints nothing; the last plan-history entry covers Part 2 (AI-1); `grep -c "^## "` gives 4 for each chosen example (AI-2).
-- [ ] Approval, commit `docs: AI work log for the delivery`, push.
+- [x] Verify: `grep -rnE "[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}" --exclude-dir=node_modules --exclude=pnpm-lock.yaml . | grep -v "@example\.com"` prints nothing; `grep -rnEi "(token|secret|api[_-]?key)[\"' ]*[:=][\"' ]*[A-Za-z0-9_-]{20,}" --exclude-dir=node_modules .` prints nothing; `git ls-files | grep "\.dev\.vars$"` prints nothing; the last plan-history entry covers Part 2 (AI-1); `grep -c "^## "` gives 4 for each chosen example (AI-2).
+- [x] Approval, commit `docs: AI work log for the delivery`, push.
 
 ---
 
