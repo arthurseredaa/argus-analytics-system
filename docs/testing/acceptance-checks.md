@@ -782,7 +782,7 @@ Expected: the measured growth matches ADR 0005 within the margin it states. Drai
 
 Depends on: metrics document (p95 targets, set in stage 4 per nfr.md), R-18.
 
-Automated: none, a measurement.
+Automated: `pnpm test -t "NFR-6"` covers the data points and the probe, not the p95 itself. Cases: `NFR-6 endpoint labels are fixed patterns, never the raw path`, `NFR-6 R-18 a request point has the endpoint as index, duration and status as doubles, country and colo as blobs`, `NFR-6 every request writes one data point`, `NFR-6 a handler that throws is recorded with status 500`, `NFR-6 a D1 overload that reaches the error handler is tagged on its point`, `NFR-6 a broken Analytics Engine binding never fails the request`, `NFR-6 probe answers 200 with the D1 time`, `NFR-6 probe writes nothing and sets no cookie`, `NFR-6 probe answers 500 when D1 fails`. The p95 measurement stays manual.
 
 Manual:
 1. `k6 run -e BASE=$BASE --summary-export $TMP/steady.json load/steady.js` at the average rate, covering `GET /p/demo`, `POST /api/complete`, `GET /go?prelander=demo` and `POST /api/events`.

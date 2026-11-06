@@ -4,6 +4,7 @@ import { createApp } from "./app.ts";
 import { prelanderFlows } from "./domain/prelanders.ts";
 import { consumeEvents } from "./events/consumer.ts";
 import { LOADER_CRON, runLoader } from "./events/loader.ts";
+import { recordLoaderRun } from "./ops/metrics.ts";
 
 export const app = createApp(prelanderFlows);
 
@@ -17,8 +18,10 @@ export default {
   async scheduled(controller, env) {
     // The alert cron of stage 6 adds a branch here, not a Worker.
     if (controller.cron === LOADER_CRON) {
+      const now = Date.now();
       try {
-        await runLoader(env, Date.now());
+        const run = await runLoader(env, now);
+        await recordLoaderRun(env, run, now);
       } catch (err) {
         // The class name only: an error message can quote what it failed on.
         const name = err instanceof Error ? err.name : "unknown";

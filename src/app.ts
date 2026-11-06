@@ -6,19 +6,24 @@ import type { Flow } from "./domain/flow.ts";
 import { completeRoute } from "./routes/complete.ts";
 import { eventsRoute } from "./routes/events.ts";
 import { goRoute } from "./routes/go.ts";
+import { isD1Overload, requestMetrics } from "./ops/metrics.ts";
 import { identity } from "./routes/identity.ts";
 import { postbackRoute } from "./routes/postback.ts";
 import { prelanderRoute } from "./routes/prelander.ts";
+import { probeRoute } from "./routes/probe.ts";
 import { reportRoute } from "./routes/report.ts";
 import { testRoute } from "./routes/test.ts";
 
 export type AppEnv = {
   Bindings: Env;
-  Variables: { userId: string; returning: boolean };
+  Variables: { userId: string; returning: boolean; errorTag?: "d1_overload" };
 };
 
 export function createApp(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+
+  // First, so the point sees every response, including the one the error handler builds.
+  app.use("*", requestMetrics());
 
   app.get("/healthz", (c) => c.json({ sha: c.env.GIT_SHA }));
 
@@ -37,9 +42,12 @@ export function createApp(flows: ReadonlyMap<string, Flow>): Hono<AppEnv> {
   app.route("/__test", testRoute());
   // No identity middleware: a partner server is not a user and gets no cookie (ADR 0007).
   app.route("/postback", postbackRoute());
+  // No identity middleware: the probe is not a user and writes nothing.
+  app.route("/__probe", probeRoute());
 
   // Names the error class only: a message can carry request data such as an email.
   app.onError((err, c) => {
+    if (isD1Overload(err)) c.set("errorTag", "d1_overload");
     console.log(JSON.stringify({ msg: "unhandled", name: err.name }));
     return c.json({ error: "internal" }, 500);
   });
