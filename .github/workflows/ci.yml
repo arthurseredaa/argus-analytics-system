@@ -48,11 +48,19 @@ jobs:
       - name: Install Chromium
         if: steps.pw-cache.outputs.cache-hit != 'true'
         timeout-minutes: 3
-        run: pnpm exec playwright install --with-deps chromium
-      - name: Install Chromium system libraries
-        if: steps.pw-cache.outputs.cache-hit == 'true'
-        timeout-minutes: 3
-        run: pnpm exec playwright install-deps chromium
+        run: pnpm exec playwright install chromium
+      # The runner image usually has every library Chromium links against; install-deps then only
+      # adds fonts the quiz test does not need, and a slow apt mirror can take minutes for them.
+      # So apt runs only when ldd reports a missing library.
+      - name: Install missing Chromium system libraries
+        timeout-minutes: 6
+        run: |
+          bin=$(find ~/.cache/ms-playwright -type f \( -name chrome-headless-shell -o -name headless_shell \) | head -n 1)
+          if [ -n "$bin" ] && ! ldd "$bin" | grep -q "not found"; then
+            echo "all system libraries present for $bin, apt skipped"
+          else
+            pnpm exec playwright install-deps chromium
+          fi
       - name: Write .dev.vars
         run: |
           cat > .dev.vars <<EOF
