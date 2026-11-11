@@ -78,7 +78,9 @@ jobs:
 
   deploy:
     needs: [check, e2e]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Disabled: the Worker was deleted from Cloudflare after the hand-in. Restore the original
+    # condition (github.event_name == 'push' && github.ref == 'refs/heads/main') to deploy again.
+    if: false
     environment: argus-cloudflare
     runs-on: ubuntu-latest
     timeout-minutes: 10
